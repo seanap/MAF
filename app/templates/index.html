@@ -32,7 +32,7 @@
   <header>
     <img src="/static/logo.png" alt="Audiobook Finder logo" class="logo" />
     <h1>Audiobook Finder</h1>
-    <span class="muted">Download Audiobooks and Import to Audiobookshelf</span>
+    <span class="muted">Remote MAM requests to qBittorrent; Audiobookshelf scans qB's folder</span>
   </header>
 
   <form id="searchForm" class="row">
@@ -81,7 +81,6 @@
 		      <th class="center">Link</th>
 		      <th>When</th>
 		      <th>Status</th>
-		      <th>Import</th>
 		      <th>Remove</th>
 		    </tr>
         </thead>
@@ -92,7 +91,7 @@
     <p class="muted">Health check: <code id="health">…</code></p>
   </div>
   <div style="margin-left:auto">
-    <button id="showHistoryBtn" title="Show download history">History & Import</button>
+    <button id="showHistoryBtn" title="Show download history">History</button>
   </div>
   {% if setup_enabled %}
   <div style="margin-left:auto; margin-top:0.5rem">

@@ -1,4 +1,5 @@
 import os, json, re
+from pathlib import Path
 import httpx
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -10,7 +11,10 @@ from datetime import datetime
 from typing import List, Tuple
 
 # ---------------------------- Config ----------------------------
-CONFIG_PATH = os.getenv("APP_CONFIG_PATH", "/data/config.json")
+DATA_DIR = os.getenv("DATA_DIR", "/data")
+CONFIG_PATH = os.getenv("APP_CONFIG_PATH", os.path.join(DATA_DIR, "config.json"))
+DB_PATH = os.getenv("DB_PATH", os.path.join(DATA_DIR, "history.db"))
+BASE_DIR = Path(__file__).resolve().parent
 
 def load_json_config() -> dict:
     try:
@@ -25,6 +29,12 @@ def load_json_config() -> dict:
 def is_setup_disabled() -> bool:
     val = os.getenv("DISABLE_SETUP", "")
     return str(val).strip().lower() in ("1", "true", "yes", "on")
+
+def env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return str(raw).strip().lower() in ("1", "true", "yes", "on")
 
 def build_mam_cookie(raw: str) -> str:
     raw = (raw or "").strip()
@@ -102,6 +112,8 @@ class Settings:
         self.DL_DIR = cfg.get("DL_DIR") or os.getenv("DL_DIR", "/media/torrents")
         self.LIB_DIR = cfg.get("LIB_DIR") or os.getenv("LIB_DIR", "/media/audiobookshelf")
         self.IMPORT_MODE = (cfg.get("IMPORT_MODE") or os.getenv("IMPORT_MODE", "link")).lower()
+        self.LIBRARY_MODE = (cfg.get("LIBRARY_MODE") or os.getenv("LIBRARY_MODE", "qbit_abs_shared")).lower()
+        self.ENABLE_IMPORT = env_bool("ENABLE_IMPORT", False) and self.LIBRARY_MODE in ("legacy_import", "import")
 
         self.QB_INNER_DL_PREFIX = cfg.get("QB_INNER_DL_PREFIX") or os.getenv("QB_INNER_DL_PREFIX", "/downloads")
 
@@ -122,8 +134,15 @@ if _um:
         pass
 
 # ---------------------------- DB ----------------------------
-# /data should be a volume/bind mount
-engine = create_engine("sqlite:////data/history.db", future=True)
+def sqlite_url_from_path(path: str) -> str:
+    """Build a SQLite URL from a filesystem path and create its parent dir."""
+    db_path = Path(path).expanduser()
+    if not db_path.is_absolute():
+        db_path = Path.cwd() / db_path
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    return "sqlite:///" + str(db_path)
+
+engine = create_engine(sqlite_url_from_path(DB_PATH), future=True)
 with engine.begin() as cx:
     cx.execute(text("""
         CREATE TABLE IF NOT EXISTS history (
@@ -180,10 +199,10 @@ class SetupPayload(BaseModel):
     app_prefix: str | None = None
 
 # ---------------------------- App ----------------------------
-app = FastAPI(title="MAM Audiobook Finder", version="0.3.0")
+app = FastAPI(title="MAM Audiobook Finder", version="0.4.0-maf")
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 @app.get("/health")
 async def health():
@@ -492,6 +511,8 @@ def delete_history(row_id: int):
 # ---------------------------- List Importable ----------------------------
 @app.get("/qb/torrents")
 async def qb_torrents():
+    if not settings.ENABLE_IMPORT:
+        raise HTTPException(status_code=404, detail="Import workflow disabled in qBit/ABS shared-folder mode")
     async with httpx.AsyncClient(timeout=30) as c:
         await qb_login(c)
         # completed in our category
@@ -528,7 +549,6 @@ async def qb_torrents():
         
 # ---------------------------- Perform Import ----------------------------
 
-from pathlib import Path
 import shutil
 
 AUDIO_EXTS = None  # copy everything except .cue (per your request)
@@ -572,6 +592,8 @@ class ImportBody(BaseModel):
 
 @app.post("/import")
 def do_import(body: ImportBody):
+    if not settings.ENABLE_IMPORT:
+        raise HTTPException(status_code=404, detail="Import workflow disabled in qBit/ABS shared-folder mode")
     author = sanitize(body.author)
     title = sanitize(body.title)
     h = body.hash
