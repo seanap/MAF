@@ -1,6 +1,13 @@
 import os, json, re
 from pathlib import Path
 import httpx
+from app.history_store import HistoryStore
+from app.mam import InvalidTorrentId, MamClient, MamError, normalize_mam_result, validate_torrent_id
+from app.models import canonical_key
+from app.presets import build_m4b_search_payload, presets_metadata
+from app.qbit import QbitClient, QbitError
+from app.rss import FeedStore, normalize_rss_items
+from app.wedge import decide_wedge
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -8,7 +15,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from sqlalchemy import create_engine, text
 from datetime import datetime
-from typing import List, Tuple
+from typing import List, Tuple, Any
 
 # ---------------------------- Config ----------------------------
 DATA_DIR = os.getenv("DATA_DIR", "/data")
@@ -105,6 +112,9 @@ class Settings:
         self.QB_PASS = cfg.get("QB_PASS") or os.getenv("QB_PASS", "adminadmin")
         self.QB_SAVEPATH = cfg.get("QB_SAVEPATH") or os.getenv("QB_SAVEPATH", "")
         self.QB_TAGS = cfg.get("QB_TAGS") or os.getenv("QB_TAGS", "MAM,audiobook")
+        self.WEDGE_MODE = cfg.get("WEDGE_MODE") or os.getenv("WEDGE_MODE", "smart")
+        self.WEDGE_UNKNOWN_FALLBACK = env_bool("WEDGE_UNKNOWN_FALLBACK", True)
+        self.ABS_URL = (cfg.get("ABS_URL") or os.getenv("ABS_URL", "http://192.168.1.9:13378")).rstrip("/")
 
         self.QB_CATEGORY = cfg.get("QB_CATEGORY") or os.getenv("QB_CATEGORY", "mam-audiofinder")
         self.QB_POSTIMPORT_CATEGORY = cfg.get("QB_POSTIMPORT_CATEGORY") or os.getenv("QB_POSTIMPORT_CATEGORY", "")
@@ -143,6 +153,8 @@ def sqlite_url_from_path(path: str) -> str:
     return "sqlite:///" + str(db_path)
 
 engine = create_engine(sqlite_url_from_path(DB_PATH), future=True)
+history_store = HistoryStore(DB_PATH)
+feed_store = FeedStore(DB_PATH)
 with engine.begin() as cx:
     cx.execute(text("""
         CREATE TABLE IF NOT EXISTS history (
@@ -207,6 +219,162 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 @app.get("/health")
 async def health():
     return {"ok": True}
+
+class TorrentAddRequest(BaseModel):
+    torrent_id: str
+    title: str | None = None
+    author: str | None = None
+    narrator: str | None = None
+    use_wedge: bool | None = None
+    is_freeleech: bool | None = None
+
+class HistoryStateRequest(BaseModel):
+    canonical_key: str | None = None
+    torrent_id: str | None = None
+    title: str | None = None
+
+class FeedCreateRequest(BaseModel):
+    name: str
+    kind: str = "custom"
+    url: str
+    enabled: bool = True
+
+class FeedPatchRequest(BaseModel):
+    name: str | None = None
+    kind: str | None = None
+    url: str | None = None
+    enabled: bool | None = None
+
+@app.get("/api/presets")
+async def api_presets():
+    return presets_metadata()
+
+@app.get("/api/status")
+async def api_status():
+    return {
+        "app": {"ok": True, "version": app.version, "library_mode": settings.LIBRARY_MODE},
+        "qbit": {"url": settings.QB_URL, "savepath_override": bool(settings.QB_SAVEPATH)},
+        "abs": {"url": settings.ABS_URL},
+    }
+
+@app.get("/api/search")
+async def api_search(q: str = "", window: str = "past_4_months", page: int = 0, perpage: int = 25):
+    try:
+        payload = build_m4b_search_payload(q=q, window=window, page=page, perpage=perpage)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    try:
+        raw = await MamClient(settings.MAM_BASE, settings.MAM_COOKIE).search(payload)
+        items = [normalize_mam_result(item) for item in raw.get("data", [])]
+    except InvalidTorrentId:
+        items = []
+    except MamError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    annotated = history_store.annotate_items(items)
+    return {"items": annotated, "page": max(0, page), "perpage": payload["perpage"], "total": raw.get("total") or raw.get("total_found"), "preset": "recent_m4b_snatched", "window": window}
+
+@app.post("/api/torrents/add")
+async def api_add_torrent(body: TorrentAddRequest):
+    try:
+        tid = validate_torrent_id(body.torrent_id)
+    except InvalidTorrentId:
+        raise HTTPException(status_code=422, detail="Invalid MAM torrent id")
+    key = canonical_key(tid)
+    metadata = {"is_freeleech": body.is_freeleech} if body.is_freeleech is not None else {}
+    decision = decide_wedge(metadata, mode=settings.WEDGE_MODE, unknown_fallback=settings.WEDGE_UNKNOWN_FALLBACK, override=body.use_wedge)
+    try:
+        torrent_bytes = await MamClient(settings.MAM_BASE, settings.MAM_COOKIE).fetch_torrent_bytes(tid, use_wedge=decision.use_wedge)
+        state = await QbitClient(settings.QB_URL, settings.QB_USER, settings.QB_PASS).add_torrent_bytes(
+            torrent_id=tid,
+            torrent_bytes=torrent_bytes,
+            category=settings.QB_CATEGORY,
+            tags=[t.strip() for t in settings.QB_TAGS.split(",") if t.strip()] + [f"mamid-{tid}"],
+            savepath=settings.QB_SAVEPATH,
+        )
+    except MamError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    except QbitError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    history_store.mark_grabbed(key, torrent_id=tid, title=body.title or "", author=body.author or "", narrator=body.narrator or "", wedge_used=decision.use_wedge, wedge_reason=decision.reason)
+    return {"ok": True, "state": state, "torrent_id": tid, "canonical_key": key, "wedge_used": decision.use_wedge, "wedge_reason": decision.reason, "qbit_hash": None}
+
+@app.get("/api/history")
+def api_history():
+    return {"items": history_store.list_history()}
+
+@app.delete("/api/history/{row_id}")
+def api_delete_history(row_id: int):
+    history_store.delete_id(row_id)
+    return {"ok": True}
+
+@app.post("/api/history/hide")
+def api_hide(body: HistoryStateRequest):
+    key = body.canonical_key or (canonical_key(body.torrent_id) if body.torrent_id else None)
+    if not key:
+        raise HTTPException(status_code=422, detail="canonical_key or torrent_id required")
+    return history_store.hide(key)
+
+@app.post("/api/history/unhide")
+def api_unhide(body: HistoryStateRequest):
+    key = body.canonical_key or (canonical_key(body.torrent_id) if body.torrent_id else None)
+    if not key:
+        raise HTTPException(status_code=422, detail="canonical_key or torrent_id required")
+    return history_store.unhide(key)
+
+@app.post("/api/history/mark-grabbed")
+def api_mark_grabbed(body: HistoryStateRequest):
+    key = body.canonical_key or (canonical_key(body.torrent_id) if body.torrent_id else None)
+    if not key:
+        raise HTTPException(status_code=422, detail="canonical_key or torrent_id required")
+    return history_store.mark_grabbed(key, torrent_id=body.torrent_id or "", title=body.title or "")
+
+@app.get("/api/feeds")
+def api_feeds():
+    return {"items": feed_store.list_feeds()}
+
+@app.post("/api/feeds")
+def api_create_feed(body: FeedCreateRequest):
+    try:
+        return feed_store.create_feed(body.name, body.kind, body.url, body.enabled)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+@app.patch("/api/feeds/{feed_id}")
+def api_patch_feed(feed_id: int, body: FeedPatchRequest):
+    try:
+        updated = feed_store.update_feed(feed_id, name=body.name, kind=body.kind, url=body.url, enabled=body.enabled)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    if not updated:
+        raise HTTPException(status_code=404, detail="Feed not found")
+    return updated
+
+@app.delete("/api/feeds/{feed_id}")
+def api_delete_feed(feed_id: int):
+    feed_store.delete_feed(feed_id)
+    return {"ok": True}
+
+@app.get("/api/rss/items")
+def api_rss_items(feed_id: int | None = None):
+    return {"items": history_store.annotate_items(feed_store.list_items(feed_id))}
+
+@app.post("/api/feeds/{feed_id}/refresh")
+async def api_refresh_feed(feed_id: int):
+    url = feed_store.get_secret_url(feed_id)
+    if not url:
+        raise HTTPException(status_code=404, detail="Feed not found")
+    try:
+        async with httpx.AsyncClient(timeout=20, follow_redirects=False) as client:
+            resp = await client.get(url, headers={"User-Agent": "MAF/0.1", "Accept": "application/rss+xml, application/xml, text/xml, */*"})
+        if resp.status_code != 200:
+            raise ValueError(f"Feed returned HTTP {resp.status_code}")
+        if len(resp.content) > 2_000_000:
+            raise ValueError("Feed response exceeded size limit")
+        items = normalize_rss_items(resp.text, feed_id=feed_id)[:500]
+        counts = feed_store.upsert_items(feed_id, items)
+    except Exception as exc:
+        return {"ok": False, "feed_id": feed_id, "fetched_count": 0, "created_count": 0, "updated_count": 0, "skipped_count": 0, "error_count": 1, "message": str(exc)}
+    return {"ok": True, "feed_id": feed_id, "fetched_count": len(items), "skipped_count": 0, "error_count": 0, **counts}
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
@@ -377,118 +545,15 @@ class AddBody(BaseModel):
 @app.post("/add")
 async def add_to_qb(body: AddBody):
     mam_id = ("" if body.id is None else str(body.id)).strip()
-    title = (body.title or "").strip()
-    author = (body.author or "").strip()
-    narrator = (body.narrator or "").strip()
-    dl = (body.dl or "").strip()
-
-    if not mam_id and not dl:
-        raise HTTPException(status_code=400, detail="Missing MAM id and dl; need at least one")
-
-    # tags: existing + mamid=<id>
-    tag_list = [t.strip() for t in (settings.QB_TAGS or "").split(",") if t.strip()]
-    if mam_id:
-        tag_list.append(f"mamid={mam_id}")
-    tag_str = ",".join(tag_list) if tag_list else ""
-
-    direct_url = f"{settings.MAM_BASE}/tor/download.php/{dl}" if dl else None
-    id_candidates = []
-    if mam_id:
-        id_candidates = [
-            f"{settings.MAM_BASE}/tor/download.php?id={mam_id}",
-            f"{settings.MAM_BASE}/tor/download.php?tid={mam_id}",
-        ]
-
-    qb_hash = None
-
-    async with httpx.AsyncClient(timeout=60) as client:
-        await qb_login(client)
-
-        # Try URL add first if we have a cookie-less direct link
-        if direct_url:
-            form = {"urls": direct_url, "category": settings.QB_CATEGORY}
-            if tag_str: form["tags"] = tag_str
-            if settings.QB_SAVEPATH: form["savepath"] = settings.QB_SAVEPATH
-            r = await client.post(f"{settings.QB_URL}/api/v2/torrents/add", data=form)
-            if r.status_code == 200:
-                # ask qB for hash (by tag)
-                if mam_id:
-                    info = await client.get(f"{settings.QB_URL}/api/v2/torrents/info",
-                                            params={"tag": f"mamid={mam_id}", "filter": "all"})
-                    try:
-                        arr = info.json()
-                        if isinstance(arr, list) and arr:
-                            tlow = title.lower()
-                            pick = None
-                            for tor in arr:
-                                nm = (tor.get("name") or "").lower()
-                                if tlow and nm.startswith(tlow[:20]):
-                                    pick = tor; break
-                            qb_hash = (pick or arr[0]).get("hash")
-                    except Exception:
-                        pass
-
-                with engine.begin() as cx:
-                    cx.execute(text("""
-                        INSERT INTO history (mam_id, title, author, narrator, dl, qb_status, qb_hash, added_at)
-                        VALUES (:mam_id, :title, :author, :narrator, :dl, :qb_status, :qb_hash, :added_at)
-                    """), {
-                        "mam_id": mam_id, "title": title, "author": author, "narrator": narrator,
-                        "dl": dl, "qb_status": "added", "qb_hash": qb_hash,
-                        "added_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-                    })
-                return {"ok": True}
-            # else: fall through to cookie fetch
-
-        # Cookie-authenticated fetch of .torrent, then upload
-        mam_headers = {
-            "Cookie": settings.MAM_COOKIE,
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "application/x-bittorrent, */*",
-            "Referer": "https://www.myanonamouse.net/",
-            "Origin": "https://www.myanonamouse.net",
-        }
-        torrent_bytes = None
-        for url in id_candidates:
-            resp = await client.get(url, headers=mam_headers)
-            if resp.status_code == 200 and resp.content:
-                torrent_bytes = resp.content
-                break
-
-        if not torrent_bytes:
-            raise HTTPException(status_code=502, detail="Could not fetch .torrent from MAM (no dl hash and cookie fetch failed).")
-
-        files = {"torrents": ("mam.torrent", torrent_bytes, "application/x-bittorrent")}
-        data = {"category": settings.QB_CATEGORY}
-        if tag_str: data["tags"] = tag_str
-        if settings.QB_SAVEPATH: data["savepath"] = settings.QB_SAVEPATH
-
-        r = await client.post(f"{settings.QB_URL}/api/v2/torrents/add", data=data, files=files)
-        if r.status_code != 200:
-            raise HTTPException(status_code=502, detail=f"qB add (upload) failed: {r.status_code} {r.text[:160]}")
-
-        # After upload, try to fetch hash
-        if mam_id:
-            info = await client.get(f"{settings.QB_URL}/api/v2/torrents/info",
-                                    params={"tag": f"mamid={mam_id}", "filter": "all"})
-            try:
-                arr = info.json()
-                if isinstance(arr, list) and arr:
-                    qb_hash = arr[0].get("hash")
-            except Exception:
-                pass
-
-        with engine.begin() as cx:
-            cx.execute(text("""
-                INSERT INTO history (mam_id, title, author, narrator, dl, qb_status, qb_hash, added_at)
-                VALUES (:mam_id, :title, :author, :narrator, :dl, :qb_status, :qb_hash, :added_at)
-            """), {
-                "mam_id": mam_id, "title": title, "author": author, "narrator": narrator,
-                "dl": dl, "qb_status": "added", "qb_hash": qb_hash,
-                "added_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-            })
-
-    return {"ok": True}
+    if not mam_id:
+        raise HTTPException(status_code=422, detail="Legacy /add now requires numeric MAM id; private dl URLs are not accepted")
+    return await api_add_torrent(TorrentAddRequest(
+        torrent_id=mam_id,
+        title=body.title or "",
+        author=body.author or "",
+        narrator=body.narrator or "",
+        use_wedge=None,
+    ))
 
 # ---------------------------- History ----------------------------
 @app.get("/history")

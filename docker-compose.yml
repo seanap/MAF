@@ -1,7 +1,7 @@
 services:
   mam-audiofinder:
     build: .
-    image: ghcr.io/raygan/mam-audiofinder:latest
+    image: ${MAF_IMAGE:-seanap/maf:latest}
     container_name: mam-audiofinder
     ports:
       - "${APP_PORT:-8008}:8080"

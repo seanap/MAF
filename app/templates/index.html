@@ -69,6 +69,31 @@
 		</thead>
       <tbody></tbody>
     </table>
+
+    <div id="rssCard" class="card" style="margin-top:1rem;">
+      <h3 style="margin:0 0 .5rem 0; font-size:1.1rem;">MAM RSS Watch Dashboard</h3>
+      <form id="feedForm" class="row">
+        <input id="feedName" type="text" placeholder="Feed name (author/series/narrator)" />
+        <select id="feedKind">
+          <option value="author">Author</option>
+          <option value="series">Series</option>
+          <option value="narrator">Narrator</option>
+          <option value="custom">Custom MAM RSS</option>
+        </select>
+        <input id="feedUrl" type="text" placeholder="MAM RSS URL (stored server-side, redacted in UI)" />
+        <button type="submit">Save Feed</button>
+        <button type="button" id="refreshFeedsBtn">Refresh Enabled Feeds</button>
+      </form>
+      <div id="feedStatus" class="muted" style="margin-top:0.5rem"></div>
+      <table id="feeds">
+        <thead><tr><th>Name</th><th>Kind</th><th>URL</th><th>Refresh</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <table id="rssItems">
+        <thead><tr><th>Title</th><th>Feed</th><th>Link</th><th>Add</th><th>Hide</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
     
     <div id="historyCard" class="card" style="margin-top:1rem; display:none">
       <h3 style="margin:0 0 .5rem 0; font-size:1.1rem;">History</h3>
