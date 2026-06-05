@@ -380,14 +380,14 @@ async def api_refresh_feed(feed_id: int):
 async def home(request: Request):
     setup_enabled = not is_setup_disabled()
     if needs_setup() and setup_enabled:
-        return templates.TemplateResponse("setup.html", setup_context(request))
-    return templates.TemplateResponse("index.html", {"request": request, "setup_enabled": setup_enabled})
+        return templates.TemplateResponse(request, "setup.html", setup_context(request))
+    return templates.TemplateResponse(request, "index.html", {"request": request, "setup_enabled": setup_enabled})
 
 @app.get("/setup", response_class=HTMLResponse)
 async def setup_page(request: Request):
     if is_setup_disabled():
         raise HTTPException(status_code=404, detail="Not found")
-    return templates.TemplateResponse("setup.html", setup_context(request))
+    return templates.TemplateResponse(request, "setup.html", setup_context(request))
 
 @app.post("/api/setup")
 async def api_setup(body: SetupPayload):

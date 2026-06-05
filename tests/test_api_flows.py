@@ -139,3 +139,13 @@ def test_frontend_uses_new_api_contracts():
     assert "it.torrent_id || it.id" in app_js
     assert "fetch('/api/history')" in app_js
     assert "fetch('/api/torrents/add'" in app_js
+
+
+def test_root_page_renders_review_ui(tmp_path):
+    mod = load_app(tmp_path)
+    client = TestClient(mod.app)
+
+    resp = client.get('/')
+    assert resp.status_code == 200
+    assert 'Audiobook Finder' in resp.text
+    assert 'MAM RSS Watch Dashboard' in resp.text
