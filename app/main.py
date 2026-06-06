@@ -10,7 +10,7 @@ from app.qbit import QbitClient, QbitError
 from app.rss import FeedStore, normalize_rss_items, redact_url
 from app.wedge import decide_wedge
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -269,6 +269,26 @@ async def api_status():
         "qbit": {"url": settings.QB_URL, "savepath_override": bool(settings.QB_SAVEPATH)},
         "abs": {"url": settings.ABS_URL},
     }
+
+@app.get("/api/mam/cover/{torrent_id}")
+async def api_mam_cover(torrent_id: str):
+    tid = validate_torrent_id(torrent_id)
+    cookie = build_mam_cookie(settings.MAM_COOKIE)
+    if not cookie:
+        raise HTTPException(status_code=404, detail="MAM cookie is not configured")
+    url = f"https://cdn.myanonamouse.net/t/p/small/{tid}.webp"
+    headers = {"Cookie": cookie, "User-Agent": "MAF/0.1", "Accept": "image/webp,image/*,*/*"}
+    try:
+        async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+            response = await client.get(url, headers=headers)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="MAM cover fetch failed") from exc
+    if response.status_code != 200 or not response.content:
+        raise HTTPException(status_code=404, detail="MAM cover not found")
+    content_type = response.headers.get("content-type") or "image/webp"
+    if not content_type.lower().startswith("image/"):
+        raise HTTPException(status_code=404, detail="MAM cover was not an image")
+    return Response(content=response.content, media_type=content_type, headers={"Cache-Control": "public, max-age=86400"})
 
 @app.get("/api/search")
 async def api_search(q: str = "", window: str = "", page: int = 0, perpage: int = 25, sort: str = "snatchedDesc"):

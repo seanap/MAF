@@ -14,10 +14,10 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeFilterMenus(
 class DataTable {
   constructor(table, columns, opts={}) {
     this.table = table; this.thead = table.querySelector('thead'); this.tbody = table.querySelector('tbody');
-    this.columns = columns; this.rows = []; this.sort = null; this.filters = {}; this.opts = opts;
+    this.columns = columns; this.rows = []; this.sort = null; this.filters = {}; this.opts = opts; this.hasLoaded = false;
     this.renderHeader();
   }
-  setRows(rows) { this.rows = rows || []; this.render(); }
+  setRows(rows) { this.rows = rows || []; this.hasLoaded = true; this.render(); }
   uniqueValues(col) {
     const vals = new Set();
     this.rows.forEach(row => vals.add(String(col.value(row) ?? '').trim() || '(blank)'));
@@ -76,8 +76,9 @@ class DataTable {
   }
   render() {
     const rows=this.sorted(this.rows.filter(r=>this.passes(r)));
-    this.tbody.innerHTML=''; rows.forEach(row=>{ const tr=document.createElement('tr'); if(this.opts.rowStyle) tr.setAttribute('style', this.opts.rowStyle(row)||''); this.columns.forEach(col=>{ const td=document.createElement('td'); td.className=col.className||''; const rendered=col.render ? col.render(row) : escapeHtml(col.value(row)); if(rendered instanceof Node) td.appendChild(rendered); else td.innerHTML=rendered; tr.appendChild(td); }); this.tbody.appendChild(tr); });
-    this.table.style.display = rows.length ? '' : 'none';
+    this.tbody.innerHTML=''; rows.forEach(row=>{ const tr=document.createElement('tr'); if(this.opts.rowStyle) tr.setAttribute('style', this.opts.rowStyle(row)||''); this.columns.forEach(col=>{ const td=document.createElement('td'); td.className=col.className||''; if(col.mobileLabel) td.setAttribute('data-label', col.label); const rendered=col.render ? col.render(row) : escapeHtml(col.value(row)); if(rendered instanceof Node) td.appendChild(rendered); else td.innerHTML=rendered; tr.appendChild(td); }); this.tbody.appendChild(tr); });
+    if(!rows.length && this.hasLoaded){ const tr=document.createElement('tr'); const td=document.createElement('td'); td.colSpan=this.columns.length; td.className='center muted empty-row'; td.textContent=this.rows.length ? 'No rows match the active filters. Adjust a column filter above.' : (this.opts.emptyMessage || 'No rows.'); tr.appendChild(td); this.tbody.appendChild(tr); }
+    this.table.style.display = this.hasLoaded ? '' : 'none';
     [...this.thead.querySelectorAll('th')].forEach((th,i)=>{ const mark=th.querySelector('.sort-mark'); if(mark){ const col=this.columns[i]; mark.textContent=(this.sort&&this.sort.key===col.key) ? (this.sort.dir==='asc'?'▲':'▼') : ''; }});
     if(this.opts.onRender) this.opts.onRender(rows.length, this.rows.length);
   }
@@ -93,16 +94,27 @@ if(q) q.focus();
 function mamLink(id){ return id ? `https://www.myanonamouse.net/t/${encodeURIComponent(id)}` : ''; }
 function actionButton(text, fn, disabled=false){ const b=document.createElement('button'); b.type='button'; b.textContent=text; b.disabled=disabled; b.addEventListener('click', fn); return b; }
 
+
+function itemDescription(it){ return String(it.description || it.desc || it.summary || '').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim(); }
+function coverCell(it){
+  const box=document.createElement('div'); box.className='cover-wrap';
+  const img=document.createElement('img'); img.className='book-cover-thumb'; img.loading='lazy'; img.alt=`Cover for ${it.title||'book'}`; img.src=it.cover_url || (it.torrent_id||it.id ? `/api/mam/cover/${encodeURIComponent(String(it.torrent_id||it.id))}` : '');
+  img.onerror=()=>{ img.classList.add('is-missing'); img.removeAttribute('src'); img.alt='No cover'; };
+  const desc=itemDescription(it); if(desc){ box.tabIndex=0; box.setAttribute('aria-label', `Description: ${desc}`); const tip=document.createElement('div'); tip.className='desc-tooltip'; tip.textContent=desc; box.append(img, tip); } else { box.appendChild(img); }
+  return box;
+}
+
 function initSearchTable(){
   searchTable = new DataTable($('results'), [
-    {key:'title', label:'Title', sortable:true, filter:true, value:r=>r.title||''},
-    {key:'author', label:'Author', sortable:true, filter:true, value:r=>r.author||r.author_info||''},
-    {key:'series', label:'Series', sortable:true, filter:true, value:r=>r.series||r.series_info||''},
-    {key:'narrator', label:'Narrator', sortable:true, filter:true, value:r=>r.narrator||r.narrator_info||''},
-    {key:'format', label:'Filetype', sortable:true, filter:true, value:r=>(r.format||'').toLowerCase()},
-    {key:'size', label:'Size', type:'number', sortable:true, className:'right', value:r=>r.size||0, render:r=>formatSize(r.size)},
-    {key:'seeders', label:'Seeders', type:'number', sortable:true, className:'right', value:r=>r.seeders||0, render:r=>`${r.seeders ?? '-'} / ${r.leechers ?? '-'}`},
-    {key:'uploaded', label:'Uploaded', type:'date', sortable:true, value:r=>r.uploaded_at||r.added||''},
+    {key:'cover', label:'Cover', className:'cover-cell', value:r=>r.cover_url||'', render:r=>coverCell(r)},
+    {key:'title', label:'Title', sortable:true, filter:true, mobileLabel:true, value:r=>r.title||''},
+    {key:'author', label:'Author', sortable:true, filter:true, mobileLabel:true, value:r=>r.author||r.author_info||''},
+    {key:'series', label:'Series', sortable:true, filter:true, className:'hide-mobile', value:r=>r.series||r.series_info||''},
+    {key:'narrator', label:'Narrator', sortable:true, filter:true, className:'hide-mobile', value:r=>r.narrator||r.narrator_info||''},
+    {key:'format', label:'Filetype', sortable:true, filter:true, className:'hide-mobile', value:r=>(r.format||'').toLowerCase()},
+    {key:'size', label:'Size', type:'number', sortable:true, className:'right hide-mobile', value:r=>r.size||0, render:r=>formatSize(r.size)},
+    {key:'seeders', label:'Seeders', type:'number', sortable:true, className:'right hide-mobile', value:r=>r.seeders||0, render:r=>`${r.seeders ?? '-'} / ${r.leechers ?? '-'}`},
+    {key:'uploaded', label:'Uploaded', type:'date', sortable:true, className:'hide-mobile', value:r=>r.uploaded_at||r.added||''},
     {key:'mam', label:'MAM', className:'center', value:r=>r.torrent_id||r.id||'', render:r=>{ const url=mamLink(r.torrent_id||r.id); return url ? `<a href="${url}" target="_blank" rel="noopener noreferrer">MAM</a>` : ''; }},
     {key:'add', label:'Add', value:r=>'', render:r=>actionButton('Add', async e=>addTorrentFromItem(e.currentTarget,r), !(r.torrent_id||r.id))},
   ], {onRender:(shown,total)=> statusEl.textContent=`${shown} of ${total} result(s) shown`});
@@ -133,9 +145,10 @@ async function loadHistory(){
 // ---------- RSS dashboard ----------
 const feedForm=$('feedForm'), feedStatus=$('feedStatus');
 function initRssTable(){ rssTable = new DataTable($('rssItems'), [
-  {key:'feed', label:'Feed', sortable:true, filter:true, value:r=>r.feed_name||r.feed_id||''},
-  {key:'title', label:'Title', sortable:true, filter:true, value:r=>r.title||''},
-  {key:'added', label:'Added', type:'date', sortable:true, value:r=>r.site_added_at||r.first_seen_at||r.last_seen_at||''},
+  {key:'cover', label:'Cover', className:'cover-cell', value:r=>r.cover_url||'', render:r=>coverCell(r)},
+  {key:'feed', label:'Feed', sortable:true, filter:true, className:'hide-mobile', value:r=>r.feed_name||r.feed_id||''},
+  {key:'title', label:'Title', sortable:true, filter:true, mobileLabel:true, value:r=>r.title||''},
+  {key:'added', label:'Added', type:'date', sortable:true, className:'hide-mobile', value:r=>r.site_added_at||r.first_seen_at||r.last_seen_at||''},
   {key:'mam', label:'MAM', className:'center', value:r=>r.torrent_id||'', render:r=>r.details_url?`<a href="${escapeHtml(r.details_url)}" target="_blank" rel="noopener noreferrer">MAM</a>`:''},
   {key:'add', label:'Add', value:r=>'', render:r=>actionButton('Add', async e=>{ await addTorrentFromItem(e.currentTarget,r); await loadRssItems(); }, !r.torrent_id)},
   {key:'hide', label:'Hide', value:r=>'', render:r=>actionButton('Hide', async()=>{ await jsonFetch('/api/history/hide',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({canonical_key:r.canonical_key})}); await loadRssItems(); })},

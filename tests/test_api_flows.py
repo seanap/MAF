@@ -170,6 +170,8 @@ def test_frontend_uses_new_api_contracts():
     assert "it.torrent_id || it.id" in app_js
     assert "fetch('/api/history')" in app_js
     assert "fetch('/api/torrents/add'" in app_js
+    assert "coverCell" in app_js
+    assert "No rows match the active filters" in app_js
 
 
 def test_root_page_renders_review_ui(tmp_path):

@@ -115,3 +115,4 @@ def test_normalize_rss_items_captures_pubdate():
     item = normalize_rss_items(xml, feed_id=1)[0]
 
     assert item["site_added_at"] == "2026-06-06T12:00:00+00:00"
+    assert item["cover_url"] == "/api/mam/cover/123"

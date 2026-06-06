@@ -109,6 +109,7 @@ def normalize_rss_items(xml_text: str, *, feed_id: int) -> list[dict[str, Any]]:
         link = _text(elem, "link")
         guid = _text(elem, "guid")
         published_at = normalize_rss_datetime(_text(elem, "pubDate") or _text(elem, "dc:date") or _text(elem, "date"))
+        description = _text(elem, "description")
         tid = extract_torrent_id(link) or extract_torrent_id(guid)
         if not tid:
             continue
@@ -118,6 +119,8 @@ def normalize_rss_items(xml_text: str, *, feed_id: int) -> list[dict[str, Any]]:
             "torrent_id": tid,
             "title": title,
             "details_url": f"https://www.myanonamouse.net/t/{tid}",
+            "cover_url": f"/api/mam/cover/{tid}",
+            "description": description,
             "site_added_at": published_at,
             "source": "rss",
             "format": "M4B" if "m4b" in title.lower() else "",
@@ -168,6 +171,8 @@ class FeedStore:
                   torrent_id TEXT NOT NULL,
                   title TEXT,
                   details_url TEXT,
+                  cover_url TEXT,
+                  description TEXT,
                   site_added_at TEXT,
                   rss_position INTEGER NOT NULL DEFAULT 0,
                   first_seen_at TEXT NOT NULL,
@@ -183,6 +188,8 @@ class FeedStore:
             self._ensure_column(cx, "feeds", "last_refresh_status", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column(cx, "feeds", "last_refresh_message", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column(cx, "feeds", "last_refresh_at", "TEXT NOT NULL DEFAULT ''")
+            self._ensure_column(cx, "rss_items", "cover_url", "TEXT NOT NULL DEFAULT ''")
+            self._ensure_column(cx, "rss_items", "description", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column(cx, "rss_items", "site_added_at", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column(cx, "rss_items", "rss_position", "INTEGER NOT NULL DEFAULT 0")
 
@@ -290,11 +297,11 @@ class FeedStore:
                 before = cx.execute("SELECT id FROM rss_items WHERE feed_id=? AND canonical_key=?", (feed_id, item["canonical_key"])).fetchone()
                 cx.execute(
                     """
-                    INSERT INTO rss_items (feed_id, canonical_key, torrent_id, title, details_url, site_added_at, rss_position, first_seen_at, last_seen_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(feed_id, canonical_key) DO UPDATE SET title=excluded.title, details_url=excluded.details_url, site_added_at=COALESCE(NULLIF(excluded.site_added_at, ''), rss_items.site_added_at), rss_position=excluded.rss_position, last_seen_at=excluded.last_seen_at
+                    INSERT INTO rss_items (feed_id, canonical_key, torrent_id, title, details_url, cover_url, description, site_added_at, rss_position, first_seen_at, last_seen_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(feed_id, canonical_key) DO UPDATE SET title=excluded.title, details_url=excluded.details_url, cover_url=excluded.cover_url, description=excluded.description, site_added_at=COALESCE(NULLIF(excluded.site_added_at, ''), rss_items.site_added_at), rss_position=excluded.rss_position, last_seen_at=excluded.last_seen_at
                     """,
-                    (feed_id, item["canonical_key"], item["torrent_id"], item.get("title"), item.get("details_url"), item.get("site_added_at") or "", position, ts, ts),
+                    (feed_id, item["canonical_key"], item["torrent_id"], item.get("title"), item.get("details_url"), item.get("cover_url") or f"/api/mam/cover/{item['torrent_id']}", item.get("description") or "", item.get("site_added_at") or "", position, ts, ts),
                 )
                 if before: updated += 1
                 else: created += 1

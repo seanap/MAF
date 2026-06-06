@@ -162,6 +162,8 @@ def normalize_mam_result(item: dict[str, Any]) -> dict[str, Any]:
         "seeders": item.get("seeders"),
         "leechers": item.get("leechers"),
         "uploaded_at": item.get("added"),
+        "description": _flatten(item.get("description") or item.get("descr") or item.get("synopsis") or ""),
+        "cover_url": f"/api/mam/cover/{tid}",
         "details_url": f"https://www.myanonamouse.net/t/{tid}",
         "is_freeleech": is_freeleech,
     }
