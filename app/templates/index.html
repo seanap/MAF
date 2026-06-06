@@ -8,28 +8,28 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16.png">
   <link rel="apple-touch-icon" href="/static/favicon-180.png">
-  <meta name="theme-color" content="#f4ecd8">
+  <meta name="theme-color" content="#0b1020">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Orbitron:wght@500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --source-bg: #170d02;
+      --source-bg: #e8f0ff;
       --source-accent: #ffac02;
-      --paper: #f4ecd8;
-      --paper-soft: rgba(244,236,216,.78);
-      --blue: #0053fd;
-      --blue-2: #0039b9;
-      --blue-faint: rgba(0,83,253,.10);
-      --blue-line: rgba(0,83,253,.54);
-      --blue-soft-line: rgba(0,83,253,.25);
-      --ink: #01194c;
-      --muted: rgba(1,25,76,.68);
-      --faint: rgba(1,25,76,.42);
-      --danger: #bc1b52;
-      --ok: #00875f;
-      --cell: rgba(244,236,216,.58);
-      --cell-strong: rgba(255,252,242,.78);
+      --paper: #0b1020;
+      --paper-soft: rgba(11,16,32,.82);
+      --blue: #7eb6ff;
+      --blue-2: #b8d7ff;
+      --blue-faint: rgba(126,182,255,.12);
+      --blue-line: rgba(126,182,255,.62);
+      --blue-soft-line: rgba(126,182,255,.27);
+      --ink: #e6f0ff;
+      --muted: rgba(220,234,255,.72);
+      --faint: rgba(220,234,255,.42);
+      --danger: #ff7aa8;
+      --ok: #63e6be;
+      --cell: rgba(12,18,36,.72);
+      --cell-strong: rgba(16,24,48,.88);
       --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       --display: 'Orbitron', 'Space Grotesk', system-ui, sans-serif;
       --sans: 'Space Grotesk', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
@@ -59,7 +59,7 @@
     .backdrop-base { z-index: 1; background: var(--source-bg); mix-blend-mode: difference; }
     .backdrop-filler {
       z-index: 2;
-      opacity: .055;
+      opacity: .032;
       mix-blend-mode: difference;
       background:
         radial-gradient(ellipse at 18% 14%, rgba(255,172,2,.95), transparent 18rem),
@@ -79,14 +79,14 @@
     .backdrop-invert { z-index: 200; background:#fff; mix-blend-mode:difference; }
     .backdrop-noise {
       z-index: 201;
-      opacity: .24;
-      mix-blend-mode: color-dodge;
+      opacity: .16;
+      mix-blend-mode: screen;
       background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' fill='%23eaeaea' filter='url(%23n)' opacity='0.62'/%3E%3C/svg%3E");
       background-size: 512px 512px;
     }
     .backdrop-grid {
       z-index: 202;
-      opacity: .17;
+      opacity: .24;
       background:
         linear-gradient(var(--blue-soft-line) 1px, transparent 1px),
         linear-gradient(90deg, var(--blue-soft-line) 1px, transparent 1px),
@@ -101,8 +101,8 @@
       width: min(94vw, 1640px);
       margin: clamp(14px, 2vw, 28px) auto;
       border: 1px solid currentColor;
-      background: rgba(244,236,216,.52);
-      box-shadow: 0 0 0 1px rgba(0,83,253,.10), 0 22px 80px rgba(0,50,180,.10);
+      background: rgba(6,10,22,.78);
+      box-shadow: 0 0 0 1px rgba(126,182,255,.16), 0 22px 90px rgba(0,0,0,.48);
     }
     .shell::before,
     .shell::after {
@@ -133,7 +133,7 @@
     .nav-cell:last-child { border-right:0; }
     .brand-cell { align-items:flex-start; flex-direction:column; gap:8px; }
     .brand-mark { display:flex; align-items:center; gap:12px; }
-    .logo { width: 34px; height: 34px; object-fit: contain; filter: saturate(0) contrast(9) sepia(1) hue-rotate(178deg) saturate(8); }
+    .logo { width: 34px; height: 34px; object-fit: contain; filter: saturate(0) contrast(5) sepia(1) hue-rotate(178deg) saturate(6) brightness(1.8); }
     h1 {
       margin: 0;
       font-family: var(--display);
@@ -169,7 +169,7 @@
       border-bottom: 1px solid currentColor;
       background:
         linear-gradient(90deg, rgba(0,83,253,.045), transparent 34%, rgba(0,83,253,.035)),
-        rgba(244,236,216,.36);
+        rgba(8,13,28,.72);
     }
     .card:last-of-type { border-bottom: 0; }
     .card::before {
@@ -206,10 +206,10 @@
       border: 1px solid currentColor;
       border-radius: 0;
       color: var(--blue);
-      background: rgba(255,255,255,.16);
+      background: rgba(3,8,20,.78);
       outline: none;
       font: 500 .84rem var(--mono);
-      box-shadow: inset 0 0 0 9999px rgba(244,236,216,.16);
+      box-shadow: inset 0 0 0 9999px rgba(126,182,255,.035);
     }
     input[type="text"] { flex:1; min-width: 260px; }
     input[type="number"] { width: 5.2rem; }
@@ -230,7 +230,7 @@
       border:1px solid currentColor;
       border-radius:0;
       color: var(--blue);
-      background: rgba(244,236,216,.34);
+      background: rgba(126,182,255,.08);
       cursor:pointer;
       font-size:.72rem;
       font-weight:600;
@@ -245,14 +245,14 @@
       margin-top: 16px;
       font-size:.86rem;
       border: 1px solid currentColor;
-      background: rgba(244,236,216,.40);
+      background: var(--cell);
     }
     th, td { padding: 9px 10px; border: 1px solid var(--blue-soft-line); text-align:left; vertical-align:top; }
     th {
       position:relative;
       white-space:nowrap;
-      color: var(--paper);
-      background: var(--blue);
+      color: var(--blue-2);
+      background: rgba(126,182,255,.16);
       font-size:.67rem;
       font-weight:600;
     }
@@ -276,14 +276,14 @@
       min-width:250px;
       max-height:340px;
       overflow:auto;
-      background: var(--paper);
+      background: #071020;
       border:2px solid currentColor;
-      box-shadow: 12px 12px 0 rgba(0,83,253,.18);
+      box-shadow: 12px 12px 0 rgba(126,182,255,.16);
       padding:10px;
       white-space:normal;
       color:var(--blue);
     }
-    .filter-menu label { display:block; margin:.28rem 0; color:var(--ink); font: .75rem var(--mono); text-transform:none; letter-spacing:0; }
+    .filter-menu label { display:block; margin:.28rem 0; color:var(--muted); font: .75rem var(--mono); text-transform:none; letter-spacing:0; }
     .filter-menu input[type="text"] { min-width:180px; width:100%; margin-bottom:.45rem; }
     .hidden { display:none !important; }
     .feed-controls input[type="text"] { min-width: 150px; }
@@ -293,6 +293,75 @@
     #health { color: var(--ok); }
     #historyCard { display:none; }
     .archive-rule { height:1px; background:currentColor; opacity:.55; margin:14px 0; }
+
+    /* crop marks + coordinate system: blueprint artifact, not SaaS card confetti */
+    .shell > header::before,
+    .shell > header::after,
+    .card .crop-a,
+    .card .crop-b { content:""; position:absolute; width:28px; height:28px; pointer-events:none; }
+    .shell > header { position:relative; }
+    .shell > header::before { left:10px; top:10px; border-left:2px solid currentColor; border-top:2px solid currentColor; opacity:.72; }
+    .shell > header::after { right:10px; top:10px; border-right:2px solid currentColor; border-top:2px solid currentColor; opacity:.72; }
+    .card { counter-increment: panel; }
+    .card::after {
+      content: attr(data-coord) " / PANEL 0" counter(panel);
+      position:absolute;
+      left: 18px;
+      bottom: 10px;
+      font: 600 .58rem var(--mono);
+      letter-spacing:.18em;
+      color: var(--faint);
+      text-transform: uppercase;
+    }
+    .card .crop-a { left:10px; top:10px; border-left:1px solid currentColor; border-top:1px solid currentColor; opacity:.5; }
+    .card .crop-b { right:10px; bottom:10px; border-right:1px solid currentColor; border-bottom:1px solid currentColor; opacity:.5; }
+
+    .terminal-viewport {
+      position: relative;
+      margin-top: 14px;
+      padding: 28px 14px 14px;
+      border: 2px solid currentColor;
+      background:
+        linear-gradient(rgba(126,182,255,.055) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(126,182,255,.045) 1px, transparent 1px),
+        rgba(1,5,16,.82);
+      background-size: 22px 22px, 22px 22px, 100% 100%;
+      box-shadow: inset 0 0 40px rgba(126,182,255,.06), 10px 10px 0 rgba(126,182,255,.10);
+      overflow-x:auto;
+    }
+    .terminal-viewport::before {
+      content:"TERMINAL VIEWPORT // RESULT REGISTER // FILTERABLE M4B LEDGER";
+      position:absolute;
+      left:0;
+      top:0;
+      right:0;
+      height:24px;
+      padding:5px 10px;
+      border-bottom:1px solid currentColor;
+      font:600 .6rem var(--mono);
+      letter-spacing:.14em;
+      color:var(--blue-2);
+      background:rgba(126,182,255,.10);
+    }
+    .terminal-viewport table { margin-top:0; border:0; background:transparent; }
+    .terminal-viewport:has(#results[style*="display:none"]) { display:none; }
+
+    table { font-family: var(--mono); }
+    tbody { counter-reset: ledger-row; }
+    tbody tr { counter-increment: ledger-row; }
+    tbody td:first-child { position:relative; padding-left: 2.4rem; }
+    tbody td:first-child::before {
+      content: counter(ledger-row, decimal-leading-zero);
+      position:absolute;
+      left:.55rem;
+      top:.7rem;
+      color:var(--faint);
+      font-size:.62rem;
+      letter-spacing:.08em;
+    }
+    tbody tr:nth-child(odd) { background: rgba(126,182,255,.035); }
+    tbody tr:nth-child(even) { background: rgba(0,0,0,.08); }
+    th { border-color: var(--blue-line); }
 
     @media (max-width: 960px) {
       .shell { width: calc(100vw - 18px); margin:9px; }
@@ -330,7 +399,8 @@
       {% if setup_enabled %}<section class="nav-cell"><button type="button" onclick="window.location.href='/setup'">Setup</button></section>{% endif %}
     </header>
 
-    <section class="card" data-panel="catalog query / default 3mo protocol">
+    <section class="card" data-panel="catalog query / default 3mo protocol" data-coord="A01:C08">
+      <i class="crop-a"></i><i class="crop-b"></i>
       <div class="panel-grid">
         <aside class="panel-title">
           <span class="eyebrow">Search Console</span>
@@ -357,12 +427,13 @@
             <button id="searchBtn" type="submit">Search</button>
           </form>
           <div id="status" class="muted" style="margin-top:0.7rem"></div>
-          <table id="results" style="display:none"><thead></thead><tbody></tbody></table>
+          <div class="terminal-viewport"><table id="results" style="display:none"><thead></thead><tbody></tbody></table></div>
         </div>
       </div>
     </section>
 
-    <section id="rssCard" class="card" data-panel="rss watch dashboard / visible feed overlay">
+    <section id="rssCard" class="card" data-panel="rss watch dashboard / visible feed overlay" data-coord="D01:H14">
+      <i class="crop-a"></i><i class="crop-b"></i>
       <div class="panel-grid">
         <aside class="panel-title">
           <span class="eyebrow">Watch Protocols</span>
@@ -389,7 +460,8 @@
       </div>
     </section>
 
-    <section id="historyCard" class="card" data-panel="history register / external archive links">
+    <section id="historyCard" class="card" data-panel="history register / external archive links" data-coord="J01:L08">
+      <i class="crop-a"></i><i class="crop-b"></i>
       <div class="panel-grid">
         <aside class="panel-title">
           <span class="eyebrow">Transfer Ledger</span>
