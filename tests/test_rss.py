@@ -8,6 +8,8 @@ from app.rss import FeedStore, extract_torrent_id, normalize_rss_items, redact_u
 def test_feed_url_redaction_and_validation():
     url = "https://www.myanonamouse.net/rss.php?uid=1&passkey=secret&token=abc"
     assert validate_mam_feed_url(url) == url
+    cdn_url = "https://02e0d.mrd.ninja/rss/1634bd1a"
+    assert validate_mam_feed_url(cdn_url) == cdn_url
     redacted = redact_url(url)
     assert "secret" not in redacted
     assert "abc" not in redacted

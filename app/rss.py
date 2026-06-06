@@ -11,6 +11,7 @@ from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 from .models import canonical_key
 
 MAM_HOSTS = {"www.myanonamouse.net", "myanonamouse.net"}
+MAM_RSS_HOST_SUFFIXES = (".mrd.ninja",)
 SECRET_QUERY_KEYS = {"passkey", "token", "auth", "key", "uid", "secret"}
 
 
@@ -30,7 +31,9 @@ def redact_url(url: str) -> str:
 def validate_mam_feed_url(url: str) -> str:
     url = (url or "").strip()
     parsed = urlparse(url)
-    if parsed.scheme != "https" or parsed.hostname not in MAM_HOSTS:
+    hostname = (parsed.hostname or "").lower()
+    host_allowed = hostname in MAM_HOSTS or any(hostname.endswith(suffix) for suffix in MAM_RSS_HOST_SUFFIXES)
+    if parsed.scheme != "https" or not host_allowed:
         raise ValueError("Only HTTPS MAM RSS URLs are allowed")
     if not parsed.path:
         raise ValueError("Feed URL path required")
