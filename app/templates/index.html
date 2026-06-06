@@ -8,269 +8,402 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16.png">
   <link rel="apple-touch-icon" href="/static/favicon-180.png">
-  <meta name="theme-color" content="#080711">
+  <meta name="theme-color" content="#f4ecd8">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Orbitron:wght@500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #080711;
-      --bg-2: #0d0b18;
-      --panel: rgba(16, 15, 30, .74);
-      --panel-strong: rgba(25, 22, 43, .86);
-      --surface: rgba(255,255,255,.045);
-      --surface-hover: rgba(255,255,255,.075);
-      --line: rgba(226, 214, 255, .12);
-      --line-soft: rgba(226, 214, 255, .07);
-      --text: #f6f1ff;
-      --muted: #a9a0c0;
-      --faint: #746a89;
-      --gold: #d9ad5f;
-      --gold-2: #f0d28a;
-      --violet: #8f6fff;
-      --violet-2: #c48dff;
-      --cyan: #70e6ff;
-      --danger: #ff7c9a;
-      --ok: #65e6a4;
-      --shadow: 0 24px 80px rgba(0,0,0,.48), inset 0 1px 0 rgba(255,255,255,.04);
+      --source-bg: #170d02;
+      --source-accent: #ffac02;
+      --paper: #f4ecd8;
+      --paper-soft: rgba(244,236,216,.78);
+      --blue: #0053fd;
+      --blue-2: #0039b9;
+      --blue-faint: rgba(0,83,253,.10);
+      --blue-line: rgba(0,83,253,.54);
+      --blue-soft-line: rgba(0,83,253,.25);
+      --ink: #01194c;
+      --muted: rgba(1,25,76,.68);
+      --faint: rgba(1,25,76,.42);
+      --danger: #bc1b52;
+      --ok: #00875f;
+      --cell: rgba(244,236,216,.58);
+      --cell-strong: rgba(255,252,242,.78);
+      --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --display: 'Orbitron', 'Space Grotesk', system-ui, sans-serif;
+      --sans: 'Space Grotesk', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
     }
+
     * { box-sizing: border-box; }
-    html { background: var(--bg); }
+    html { background: var(--source-bg); }
     body {
       min-height: 100vh;
       margin: 0;
-      padding: clamp(1rem, 2.5vw, 2.4rem);
-      color: var(--text);
-      font-family: 'Geist', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      font-feature-settings: "cv01", "ss03";
-      background:
-        radial-gradient(circle at 15% 8%, rgba(196,141,255,.24), transparent 36rem),
-        radial-gradient(circle at 84% 0%, rgba(217,173,95,.22), transparent 32rem),
-        radial-gradient(circle at 58% 92%, rgba(112,230,255,.10), transparent 28rem),
-        linear-gradient(145deg, #05040a 0%, #100a1f 44%, #090814 100%);
+      color: var(--blue);
+      font-family: var(--sans);
+      background: var(--source-bg);
       overflow-x: hidden;
     }
-    body::before {
-      content: "";
+
+    .backdrop-base,
+    .backdrop-filler,
+    .backdrop-vignette,
+    .backdrop-invert,
+    .backdrop-noise,
+    .backdrop-grid {
       position: fixed;
       inset: 0;
-      z-index: -2;
       pointer-events: none;
+    }
+    .backdrop-base { z-index: 1; background: var(--source-bg); mix-blend-mode: difference; }
+    .backdrop-filler {
+      z-index: 2;
+      opacity: .055;
+      mix-blend-mode: difference;
       background:
-        linear-gradient(90deg, transparent 0 7%, rgba(255,255,255,.035) 7.15%, transparent 7.3% 15%, rgba(255,255,255,.026) 15.1%, transparent 15.25% 100%),
-        repeating-linear-gradient(90deg, transparent 0 96px, rgba(240,210,138,.045) 97px, transparent 99px),
-        radial-gradient(ellipse at center, transparent 42%, rgba(0,0,0,.42) 100%);
-      mask-image: linear-gradient(to bottom, rgba(0,0,0,.88), rgba(0,0,0,.2) 58%, transparent 100%);
-      opacity: .65;
+        radial-gradient(ellipse at 18% 14%, rgba(255,172,2,.95), transparent 18rem),
+        radial-gradient(ellipse at 74% 30%, rgba(255,255,255,.75), transparent 23rem),
+        radial-gradient(ellipse at 48% 84%, rgba(255,172,2,.55), transparent 26rem),
+        repeating-radial-gradient(circle at 30% 40%, rgba(255,255,255,.34) 0 1px, transparent 1px 9px),
+        linear-gradient(115deg, transparent 0 42%, rgba(255,255,255,.42) 42.2% 42.45%, transparent 42.8% 100%);
+      filter: contrast(150%) grayscale(.3);
     }
-    body::after {
-      content: "ΜΑΜ • ABS • QB";
-      position: fixed;
-      right: -2.2rem;
-      top: 7rem;
-      z-index: -1;
-      pointer-events: none;
-      font-family: 'Cinzel', serif;
-      font-size: clamp(4rem, 11vw, 10rem);
-      font-weight: 700;
-      letter-spacing: .22em;
-      writing-mode: vertical-rl;
-      color: transparent;
-      -webkit-text-stroke: 1px rgba(240,210,138,.11);
-      text-shadow: 0 0 48px rgba(143,111,255,.18);
-      opacity: .75;
-      filter: invert(.08);
+    .backdrop-vignette {
+      z-index: 99;
+      background:
+        radial-gradient(ellipse at 0% 0%, transparent 52%, rgba(255,172,2,.20) 100%),
+        radial-gradient(ellipse at 100% 100%, transparent 62%, rgba(255,172,2,.10) 100%);
+      mix-blend-mode: lighten;
     }
-    header, .card, p.muted { max-width: 1380px; margin-inline: auto; }
+    .backdrop-invert { z-index: 200; background:#fff; mix-blend-mode:difference; }
+    .backdrop-noise {
+      z-index: 201;
+      opacity: .24;
+      mix-blend-mode: color-dodge;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' fill='%23eaeaea' filter='url(%23n)' opacity='0.62'/%3E%3C/svg%3E");
+      background-size: 512px 512px;
+    }
+    .backdrop-grid {
+      z-index: 202;
+      opacity: .17;
+      background:
+        linear-gradient(var(--blue-soft-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--blue-soft-line) 1px, transparent 1px),
+        linear-gradient(90deg, transparent 0 calc(100% - 1px), var(--blue-line) calc(100% - 1px));
+      background-size: 48px 48px, 48px 48px, 100% 100%;
+      mix-blend-mode: multiply;
+    }
+
+    .shell {
+      position: relative;
+      z-index: 300;
+      width: min(94vw, 1640px);
+      margin: clamp(14px, 2vw, 28px) auto;
+      border: 1px solid currentColor;
+      background: rgba(244,236,216,.52);
+      box-shadow: 0 0 0 1px rgba(0,83,253,.10), 0 22px 80px rgba(0,50,180,.10);
+    }
+    .shell::before,
+    .shell::after {
+      content: "";
+      position:absolute;
+      pointer-events:none;
+      border-color: currentColor;
+      opacity:.9;
+    }
+    .shell::before { inset: 10px; border: 1px solid currentColor; opacity:.38; }
+    .shell::after { inset: -7px; border: 1px solid currentColor; opacity:.18; }
+
     header {
+      display:grid;
+      grid-template-columns: minmax(220px, 330px) minmax(260px, 1fr) auto auto;
+      align-items: stretch;
+      border-bottom: 1px solid currentColor;
+      min-height: 98px;
+    }
+    .brand-cell, .mission-cell, .nav-cell {
+      padding: clamp(14px, 1.5vw, 22px);
+      border-right: 1px solid currentColor;
       display:flex;
       align-items:center;
-      gap:.85rem;
-      margin-bottom: 1.1rem;
-      flex-wrap:wrap;
-      padding: .25rem .1rem .9rem;
-      border-bottom: 1px solid var(--line-soft);
+      gap: 14px;
+      min-width:0;
     }
+    .nav-cell:last-child { border-right:0; }
+    .brand-cell { align-items:flex-start; flex-direction:column; gap:8px; }
+    .brand-mark { display:flex; align-items:center; gap:12px; }
+    .logo { width: 34px; height: 34px; object-fit: contain; filter: saturate(0) contrast(9) sepia(1) hue-rotate(178deg) saturate(8); }
     h1 {
       margin: 0;
-      font-family: 'Cinzel', Georgia, serif;
-      font-size: clamp(1.6rem, 3.6vw, 3rem);
-      font-weight: 700;
-      line-height: .95;
-      letter-spacing: -.04em;
-      color: var(--text);
-      text-shadow: 0 0 34px rgba(217,173,95,.18);
+      font-family: var(--display);
+      font-size: clamp(1.35rem, 2.2vw, 2.3rem);
+      line-height: .9;
+      letter-spacing: -.08em;
+      text-transform: uppercase;
+      color: var(--blue);
     }
-    h1::after { content:""; display:block; width: 7.5rem; height:1px; margin-top:.42rem; background:linear-gradient(90deg,var(--gold),transparent); opacity:.75; }
-    h3, h4 { font-family:'Cinzel', Georgia, serif; letter-spacing:-.025em; color:var(--text); }
-    .logo { height: 2.1rem; width: auto; filter: drop-shadow(0 0 22px rgba(217,173,95,.25)); }
+    .kicker, .eyebrow, th, button, select, .pill {
+      font-family: var(--mono);
+      text-transform: uppercase;
+      letter-spacing: .105em;
+    }
+    .kicker { font-size:.64rem; color:var(--muted); }
+    .mission-cell { flex-direction:column; align-items:flex-start; justify-content:center; }
+    .mission-cell strong {
+      font-family: var(--display);
+      font-size: clamp(1.35rem, 2.6vw, 3rem);
+      line-height:.92;
+      letter-spacing:-.07em;
+      text-transform:uppercase;
+      max-width: 780px;
+    }
+    .mission-cell span { color:var(--muted); font-size:.9rem; max-width:760px; }
+    .nav-cell { justify-content:center; min-width: 140px; }
+
     .card {
       position: relative;
-      border: 1px solid var(--line);
-      border-radius: 22px;
-      padding: clamp(.9rem, 2vw, 1.25rem);
-      margin-top: 1rem;
+      margin: 0;
+      padding: clamp(16px, 1.8vw, 28px);
+      border: 0;
+      border-bottom: 1px solid currentColor;
       background:
-        linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02)),
-        var(--panel);
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(18px) saturate(125%);
-      overflow: visible;
+        linear-gradient(90deg, rgba(0,83,253,.045), transparent 34%, rgba(0,83,253,.035)),
+        rgba(244,236,216,.36);
     }
+    .card:last-of-type { border-bottom: 0; }
     .card::before {
-      content:"";
+      content: attr(data-panel);
       position:absolute;
-      inset:0;
-      z-index:-1;
-      border-radius:inherit;
-      background:
-        radial-gradient(circle at 10% 0%, rgba(217,173,95,.13), transparent 19rem),
-        radial-gradient(circle at 85% 6%, rgba(143,111,255,.12), transparent 20rem);
+      right: 18px;
+      top: 12px;
+      font-family: var(--mono);
+      font-size:.62rem;
+      letter-spacing:.18em;
+      color: var(--faint);
+      text-transform: uppercase;
     }
-    .row { display:flex; gap:.62rem; flex-wrap: wrap; align-items:center; }
+    .panel-grid {
+      display:grid;
+      grid-template-columns: minmax(190px, 260px) 1fr;
+      gap: clamp(16px, 2vw, 28px);
+      align-items:start;
+    }
+    .panel-title h3, .panel-title h4 {
+      margin: 0;
+      font-family: var(--display);
+      font-size: clamp(1.1rem, 1.8vw, 1.65rem);
+      line-height:.95;
+      text-transform:uppercase;
+      letter-spacing:-.07em;
+    }
+    .panel-title p { margin:.65rem 0 0; color:var(--muted); font-size:.85rem; line-height:1.45; }
+
+    .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
     input[type="text"], input[type="number"], select {
-      min-height: 2.55rem;
-      padding:.62rem .76rem;
-      border:1px solid var(--line);
-      border-radius:10px;
-      color:var(--text);
-      background:rgba(7,6,14,.62);
-      outline:none;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.035);
+      min-height: 42px;
+      padding: 10px 12px;
+      border: 1px solid currentColor;
+      border-radius: 0;
+      color: var(--blue);
+      background: rgba(255,255,255,.16);
+      outline: none;
+      font: 500 .84rem var(--mono);
+      box-shadow: inset 0 0 0 9999px rgba(244,236,216,.16);
     }
+    input[type="text"] { flex:1; min-width: 260px; }
+    input[type="number"] { width: 5.2rem; }
     input[type="color"] {
-      width: 2.7rem;
-      height: 2.55rem;
-      padding:.18rem;
-      border:1px solid var(--line);
-      border-radius:10px;
-      background:rgba(7,6,14,.62);
+      width: 42px;
+      height: 42px;
+      padding: 2px;
+      border:1px solid currentColor;
+      border-radius:0;
+      background:transparent;
     }
-    input[type="text"] { flex:1; min-width: 240px; }
     input::placeholder { color: var(--faint); }
-    input:focus, select:focus { border-color: rgba(217,173,95,.55); box-shadow: 0 0 0 3px rgba(217,173,95,.11), inset 0 1px 0 rgba(255,255,255,.04); }
-    select option { background:#151226; color:var(--text); }
+    input:focus, select:focus { box-shadow: inset 0 0 0 1px var(--blue), 0 0 0 3px rgba(0,83,253,.12); }
+    select option { background: var(--paper); color: var(--blue); }
     button {
-      min-height: 2.55rem;
-      padding:.62rem .9rem;
-      border:1px solid rgba(240,210,138,.22);
-      color:var(--text);
-      background:linear-gradient(180deg, rgba(217,173,95,.15), rgba(143,111,255,.08));
-      border-radius:10px;
+      min-height:42px;
+      padding: 10px 14px;
+      border:1px solid currentColor;
+      border-radius:0;
+      color: var(--blue);
+      background: rgba(244,236,216,.34);
       cursor:pointer;
-      font-weight: 600;
-      letter-spacing:-.01em;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 10px 28px rgba(0,0,0,.22);
+      font-size:.72rem;
+      font-weight:600;
+      box-shadow: inset 0 -1px 0 rgba(0,83,253,.22);
     }
-    button:hover { border-color:rgba(240,210,138,.45); background:linear-gradient(180deg, rgba(217,173,95,.22), rgba(143,111,255,.12)); }
+    button:hover { color: var(--paper); background: var(--blue); }
     button:disabled { opacity:.48; cursor:not-allowed; }
+
     table {
       width:100%;
-      border-collapse: separate;
-      border-spacing:0;
-      margin-top: 1rem;
-      font-size:.9rem;
-      overflow:hidden;
-      border:1px solid var(--line-soft);
-      border-radius: 14px;
-      background:rgba(3,3,8,.26);
+      border-collapse: collapse;
+      margin-top: 16px;
+      font-size:.86rem;
+      border: 1px solid currentColor;
+      background: rgba(244,236,216,.40);
     }
-    th, td { padding: .58rem .62rem; border-bottom: 1px solid var(--line-soft); text-align:left; vertical-align:top; }
+    th, td { padding: 9px 10px; border: 1px solid var(--blue-soft-line); text-align:left; vertical-align:top; }
     th {
       position:relative;
       white-space:nowrap;
-      color:var(--gold-2);
-      background:linear-gradient(180deg, rgba(217,173,95,.12), rgba(143,111,255,.055));
-      font-size:.78rem;
-      text-transform:uppercase;
-      letter-spacing:.045em;
+      color: var(--paper);
+      background: var(--blue);
+      font-size:.67rem;
       font-weight:600;
     }
-    tbody tr { transition: background .14s ease, color .14s ease; }
-    tbody tr:hover { background: rgba(255,255,255,.055) !important; }
-    tbody tr:last-child td { border-bottom:0; }
-    a { color: var(--cyan); text-decoration:none; }
-    a:hover { color: var(--gold-2); }
-    code { font-family:'Geist Mono', ui-monospace, monospace; color:var(--gold-2); }
-    .muted { color:var(--muted); font-size:.9rem; }
+    tbody tr { transition: background .12s ease, color .12s ease; }
+    tbody tr:hover { background: rgba(0,83,253,.12) !important; }
+    a { color: var(--blue-2); text-decoration: underline; text-underline-offset: 3px; }
+    a:hover { color: var(--danger); }
+    code { font-family: var(--mono); color: var(--blue-2); }
+    .muted { color: var(--muted); font-size:.9rem; }
     .right { text-align:right; }
     .center { text-align:center; }
-    .pill { display:inline-block; border:1px solid var(--line); border-radius:999px; padding:.16rem .5rem; background:rgba(255,255,255,.045); color:var(--gold-2); font-size:.82rem; }
+    .pill { display:inline-block; border:1px solid currentColor; padding:.17rem .45rem; background:rgba(0,83,253,.08); font-size:.68rem; color:var(--blue); }
     .th-sort { cursor:pointer; user-select:none; }
-    .filter-btn { min-height:1.45rem; padding:.08rem .38rem; margin-left:.25rem; border-radius:6px; font-size:.78rem; background:rgba(255,255,255,.055); }
-    .filter-menu { position:absolute; z-index:20; top:100%; left:0; min-width:230px; max-height:330px; overflow:auto; background:#121024; border:1px solid rgba(240,210,138,.22); border-radius:12px; box-shadow:0 18px 44px rgba(0,0,0,.45); padding:.62rem; white-space:normal; color:var(--text); }
-    .filter-menu label { display:block; margin:.24rem 0; color:var(--muted); }
-    .filter-menu input[type="text"] { min-width:160px; width:95%; margin-bottom:.35rem; }
+    .filter-btn { min-height:22px; padding:2px 6px; margin-left:6px; font-size:.64rem; background:var(--paper); color:var(--blue); }
+    .filter-btn:hover { background: var(--blue-2); color: var(--paper); }
+    .filter-menu {
+      position:absolute;
+      z-index:500;
+      top:100%;
+      left:0;
+      min-width:250px;
+      max-height:340px;
+      overflow:auto;
+      background: var(--paper);
+      border:2px solid currentColor;
+      box-shadow: 12px 12px 0 rgba(0,83,253,.18);
+      padding:10px;
+      white-space:normal;
+      color:var(--blue);
+    }
+    .filter-menu label { display:block; margin:.28rem 0; color:var(--ink); font: .75rem var(--mono); text-transform:none; letter-spacing:0; }
+    .filter-menu input[type="text"] { min-width:180px; width:100%; margin-bottom:.45rem; }
     .hidden { display:none !important; }
     .feed-controls input[type="text"] { min-width: 150px; }
-    .feed-url-placeholder { min-width: 210px; color: var(--faint); }
-    .soft { opacity:.75; }
-    #status, #feedStatus { font-family:'Geist Mono', ui-monospace, monospace; color:var(--gold-2); }
-    #health { color:var(--ok); }
-    @media (max-width: 760px) {
-      body { padding:.8rem; }
-      header { align-items:flex-start; }
+    .feed-url-placeholder { min-width: 210px; color: var(--faint); font-family:var(--mono); font-size:.78rem; }
+    .soft { opacity:.72; }
+    #status, #feedStatus, #health { font-family: var(--mono); color: var(--blue-2); }
+    #health { color: var(--ok); }
+    #historyCard { display:none; }
+    .archive-rule { height:1px; background:currentColor; opacity:.55; margin:14px 0; }
+
+    @media (max-width: 960px) {
+      .shell { width: calc(100vw - 18px); margin:9px; }
+      header { grid-template-columns: 1fr; }
+      .brand-cell, .mission-cell, .nav-cell { border-right:0; border-bottom:1px solid currentColor; }
+      header .nav-cell:last-child { border-bottom:0; }
+      .panel-grid { grid-template-columns: 1fr; }
       table { display:block; overflow-x:auto; }
       input[type="text"] { min-width: 100%; }
     }
   </style>
 </head>
 <body>
-  <header>
-    <img src="/static/logo.png" alt="Audiobook Finder logo" class="logo" />
-    <h1>Audiobook Finder</h1>
-    <span class="muted">Remote MAM requests to qBittorrent; Audiobookshelf scans qB's folder</span>
-    <button id="showHistoryBtn" title="Show download history">History</button>
-    {% if setup_enabled %}<button type="button" onclick="window.location.href='/setup'">Setup / Configuration</button>{% endif %}
-  </header>
+  <div class="backdrop-base"></div>
+  <div class="backdrop-filler"></div>
+  <div class="backdrop-vignette"></div>
+  <div class="backdrop-invert"></div>
+  <div class="backdrop-noise"></div>
+  <div class="backdrop-grid"></div>
 
-  <section class="card">
-    <form id="searchForm" class="row">
-      <input id="q" type="text" placeholder="Search title/author/narrator — blank runs default 3-month M4B search" />
-      <select id="sort" title="MAM backend sort">
-        <option value="snatchedDesc">MAM sort: Snatched ↓</option>
-        <option value="seedersDesc">MAM sort: Seeders ↓</option>
-        <option value="dateDesc">MAM sort: Date Added ↓</option>
-        <option value="sizeDesc">MAM sort: Size ↓</option>
-      </select>
-      <select id="window">
-        <option value="">Auto window</option>
-        <option value="all">All time</option>
-        <option value="past_3_months">Past 3 months</option>
-        <option value="past_4_months">Past 4 months</option>
-        <option value="past_12_months">Past 12 months</option>
-      </select>
-      <select id="perpage"><option>25</option><option>50</option><option>100</option></select>
-      <button id="searchBtn" type="submit">Search</button>
-    </form>
-    <div id="status" class="muted" style="margin-top:0.5rem"></div>
-    <table id="results" style="display:none"><thead></thead><tbody></tbody></table>
-  </section>
+  <main class="shell" aria-label="Audiobook Finder control interface">
+    <header>
+      <section class="brand-cell">
+        <div class="brand-mark">
+          <img src="/static/logo.png" alt="Audiobook Finder logo" class="logo" />
+          <h1>Audiobook Finder</h1>
+        </div>
+        <span class="kicker">MAM → qBittorrent → Audiobookshelf</span>
+      </section>
+      <section class="mission-cell">
+        <strong>The Remote Request Archive</strong>
+        <span>Search MAM, send M4B torrents home, and let local automation perform the remaining civilized labor.</span>
+      </section>
+      <section class="nav-cell"><button id="showHistoryBtn" title="Show download history">History</button></section>
+      {% if setup_enabled %}<section class="nav-cell"><button type="button" onclick="window.location.href='/setup'">Setup</button></section>{% endif %}
+    </header>
 
-  <section id="rssCard" class="card">
-    <h3 style="margin:0 0 .5rem 0; font-size:1.1rem;">MAM RSS Watch Dashboard</h3>
-    <form id="feedForm" class="row">
-      <input id="feedName" type="text" placeholder="Feed name" />
-      <select id="feedKind"><option value="author">Author</option><option value="series">Series</option><option value="narrator">Narrator</option><option value="custom">Custom MAM RSS</option></select>
-      <input id="feedUrl" type="text" placeholder="MAM RSS URL (stored server-side, redacted in UI)" />
-      <input id="feedColor" type="color" value="#eef6ff" title="Feed row color" />
-      <input id="feedLimit" type="number" min="1" max="500" value="15" title="Default results per feed" style="width:5rem" />
-      <button type="submit">Save Feed</button>
-      <button type="button" id="refreshFeedsBtn">Refresh Enabled Feeds</button>
-    </form>
-    <div id="feedStatus" class="muted" style="margin-top:0.5rem"></div>
-    <h4>Feeds</h4>
-    <table id="feeds"><thead><tr><th>Color</th><th>Name</th><th>Kind</th><th>URL</th><th>Enabled</th><th>Combined</th><th>Collapsed</th><th>Limit</th><th>Status</th><th>Actions</th></tr></thead><tbody></tbody></table>
-    <h4>Combined RSS Items <span class="muted">(hidden/grabbed omitted)</span></h4>
-    <table id="rssItems"><thead></thead><tbody></tbody></table>
-  </section>
+    <section class="card" data-panel="catalog query / default 3mo protocol">
+      <div class="panel-grid">
+        <aside class="panel-title">
+          <span class="eyebrow">Search Console</span>
+          <h3>MAM Catalog</h3>
+          <p>Blank query invokes the saved three-month advanced M4B search. Header controls sort and filter the loaded table like a restrained spreadsheet artifact.</p>
+        </aside>
+        <div>
+          <form id="searchForm" class="row">
+            <input id="q" type="text" placeholder="Search title/author/narrator — blank runs default 3-month M4B search" />
+            <select id="sort" title="MAM backend sort">
+              <option value="snatchedDesc">MAM sort: Snatched ↓</option>
+              <option value="seedersDesc">MAM sort: Seeders ↓</option>
+              <option value="dateDesc">MAM sort: Date Added ↓</option>
+              <option value="sizeDesc">MAM sort: Size ↓</option>
+            </select>
+            <select id="window">
+              <option value="">Auto window</option>
+              <option value="all">All time</option>
+              <option value="past_3_months">Past 3 months</option>
+              <option value="past_4_months">Past 4 months</option>
+              <option value="past_12_months">Past 12 months</option>
+            </select>
+            <select id="perpage"><option>25</option><option>50</option><option>100</option></select>
+            <button id="searchBtn" type="submit">Search</button>
+          </form>
+          <div id="status" class="muted" style="margin-top:0.7rem"></div>
+          <table id="results" style="display:none"><thead></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </section>
 
-  <section id="historyCard" class="card" style="display:none">
-    <h3 style="margin:0 0 .5rem 0; font-size:1.1rem;">History</h3>
-    <table id="history"><thead><tr><th>Title</th><th>Author</th><th>Narrator</th><th class="center">MAM</th><th class="center">ABS</th><th>When</th><th>Status</th><th>Remove</th></tr></thead><tbody></tbody></table>
-  </section>
+    <section id="rssCard" class="card" data-panel="rss watch dashboard / visible feed overlay">
+      <div class="panel-grid">
+        <aside class="panel-title">
+          <span class="eyebrow">Watch Protocols</span>
+          <h3>MAM RSS Watch Dashboard</h3>
+          <p>Rename, color, collapse, limit, and include feeds in the combined list. Secrets stay server-side and redacted, because we are not animals.</p>
+        </aside>
+        <div>
+          <form id="feedForm" class="row">
+            <input id="feedName" type="text" placeholder="Feed name" />
+            <select id="feedKind"><option value="author">Author</option><option value="series">Series</option><option value="narrator">Narrator</option><option value="custom">Custom MAM RSS</option></select>
+            <input id="feedUrl" type="text" placeholder="MAM RSS URL (stored server-side, redacted in UI)" />
+            <input id="feedColor" type="color" value="#eef6ff" title="Feed row color" />
+            <input id="feedLimit" type="number" min="1" max="500" value="15" title="Default results per feed" />
+            <button type="submit">Save Feed</button>
+            <button type="button" id="refreshFeedsBtn">Refresh Enabled</button>
+          </form>
+          <div id="feedStatus" class="muted" style="margin-top:0.7rem"></div>
+          <div class="archive-rule"></div>
+          <h4>Feeds</h4>
+          <table id="feeds"><thead><tr><th>Color</th><th>Name</th><th>Kind</th><th>URL</th><th>Enabled</th><th>Combined</th><th>Collapsed</th><th>Limit</th><th>Status</th><th>Actions</th></tr></thead><tbody></tbody></table>
+          <h4>Combined RSS Items <span class="muted">(hidden/grabbed omitted)</span></h4>
+          <table id="rssItems"><thead></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </section>
 
-  <p class="muted">Health check: <code id="health">…</code></p>
+    <section id="historyCard" class="card" data-panel="history register / external archive links">
+      <div class="panel-grid">
+        <aside class="panel-title">
+          <span class="eyebrow">Transfer Ledger</span>
+          <h3>History</h3>
+          <p>MAM and Audiobookshelf links live here once known. ABS resolution is intentionally non-blocking.</p>
+        </aside>
+        <div>
+          <table id="history"><thead><tr><th>Title</th><th>Author</th><th>Narrator</th><th class="center">MAM</th><th class="center">ABS</th><th>When</th><th>Status</th><th>Remove</th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <p class="muted" style="width:min(94vw,1640px); margin: 10px auto 28px;">Health check: <code id="health">…</code></p>
   <script src="/static/app.js" defer></script>
 </body>
 </html>
