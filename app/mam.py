@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import json
 from typing import Any
 from urllib.parse import urlencode, urlparse
 
@@ -17,6 +18,18 @@ class MamError(RuntimeError):
 
 class InvalidTorrentId(ValueError):
     pass
+
+
+def validate_torrent_content(content: bytes, content_type: str = "") -> bytes:
+    if not content:
+        raise MamError("MAM returned an empty torrent")
+    if len(content) > MAX_TORRENT_BYTES:
+        raise MamError("MAM torrent response exceeded size limit")
+    prefix = content[:128].lstrip().lower()
+    ctype = (content_type or "").lower()
+    if prefix.startswith(b"<html") or "text/html" in ctype:
+        raise MamError("MAM returned HTML instead of a torrent")
+    return content
 
 
 def validate_torrent_id(value: str | int | None) -> str:
@@ -78,16 +91,7 @@ class MamClient:
             raise MamError("MAM returned a redirect instead of a torrent")
         if response.status_code != 200:
             raise MamError(f"MAM returned HTTP {response.status_code}")
-        content = response.content or b""
-        if not content:
-            raise MamError("MAM returned an empty torrent")
-        if len(content) > MAX_TORRENT_BYTES:
-            raise MamError("MAM torrent response exceeded size limit")
-        prefix = content[:128].lstrip().lower()
-        ctype = response.headers.get("content-type", "").lower()
-        if prefix.startswith(b"<html") or b"text/html" in ctype:
-            raise MamError("MAM returned HTML instead of a torrent")
-        return content
+        return validate_torrent_content(response.content or b"", response.headers.get("content-type", ""))
 
     async def search(self, payload: dict[str, Any]) -> dict[str, Any]:
         if not self.cookie:
@@ -114,8 +118,22 @@ class MamClient:
 
 
 def _flatten(value: Any) -> str:
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped.startswith(("{", "[")):
+            try:
+                return _flatten(json.loads(stripped))
+            except ValueError:
+                pass
+        return value
     if isinstance(value, dict):
-        return ", ".join(str(x) for x in value.values())
+        names = []
+        for x in value.values():
+            if isinstance(x, (list, tuple)) and x:
+                names.append(str(x[0]))
+            else:
+                names.append(str(x))
+        return ", ".join(names)
     if isinstance(value, list):
         return ", ".join(str(x) for x in value)
     if value is None:

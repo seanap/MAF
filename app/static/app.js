@@ -2,11 +2,25 @@
 const form = document.getElementById('searchForm');
 const q = document.getElementById('q');
 const sortSel = document.getElementById('sort');
+const windowSel = document.getElementById('window');
 const perpageSel = document.getElementById('perpage');
 const statusEl = document.getElementById('status');
 const table = document.getElementById('results');
 const tbody = table.querySelector('tbody');
 const showHistoryBtn = document.getElementById('showHistoryBtn');
+const searchFilters = {
+  title: document.getElementById('filterTitle'),
+  author: document.getElementById('filterAuthor'),
+  narrator: document.getElementById('filterNarrator'),
+  filetype: document.getElementById('filterFiletype')
+};
+let lastSearchRows = [];
+
+Object.values(searchFilters).forEach((el) => {
+  if (!el) return;
+  el.addEventListener('input', () => renderSearchRows(lastSearchRows));
+  el.addEventListener('change', () => renderSearchRows(lastSearchRows));
+});
 
 // Focus the search box
 if (q) q.focus();
@@ -26,8 +40,8 @@ if (q) q.focus();
 if (showHistoryBtn) {
   showHistoryBtn.addEventListener('click', async () => {
     const card = document.getElementById('historyCard');
-    card.style.display = '';           // reveal card
-    await loadHistory();               // populate
+    card.style.display = '';
+    await loadHistory();
     card.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 }
@@ -44,6 +58,7 @@ if (form) {
 async function runSearch() {
   const text = (q?.value || '').trim();
   const sortType = (sortSel?.value) || 'default';
+  const windowValue = (windowSel?.value) || 'all';
   const perpage = parseInt(perpageSel?.value || '25', 10);
 
   statusEl.textContent = 'Searching…';
@@ -51,85 +66,101 @@ async function runSearch() {
   tbody.innerHTML = '';
 
   try {
-    const params = new URLSearchParams({ q: text, perpage: String(perpage) });
+    const params = new URLSearchParams({ q: text, perpage: String(perpage), window: windowValue });
+    if (sortType && sortType !== 'default') params.set('sort', sortType);
     const resp = await fetch(`/api/search?${params.toString()}`);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    if (!resp.ok) {
+      let msg = `HTTP ${resp.status}`;
+      try {
+        const j = await resp.json();
+        if (j?.detail) msg += ` — ${j.detail}`;
+      } catch {}
+      throw new Error(msg);
+    }
     const data = await resp.json();
-
-    const rows = data.items || data.results || [];
-    if (!rows.length) {
+    lastSearchRows = data.items || data.results || [];
+    if (!lastSearchRows.length) {
       statusEl.textContent = 'No results.';
       return;
     }
-
-    rows.forEach((it) => {
-      const tr = document.createElement('tr');
-      const sl = `${it.seeders ?? '-'} / ${it.leechers ?? '-'}`;
-
-      // Add-to-qB button
-      const addBtn = document.createElement('button');
-      addBtn.textContent = 'Add';
-      // enable if we have a direct dl hash OR at least an id
-      addBtn.disabled = !(it.torrent_id || it.id);
-      addBtn.addEventListener('click', async () => {
-        addBtn.disabled = true;
-        addBtn.textContent = 'Adding…';
-        try {
-          const resp = await fetch('/api/torrents/add', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              torrent_id: String(it.torrent_id || it.id || ''),
-              title: it.title || '',
-              author: it.author || it.author_info || '',
-              narrator: it.narrator || it.narrator_info || '',
-              is_freeleech: it.is_freeleech
-            })
-          });
-          if (!resp.ok) {
-            let msg = `HTTP ${resp.status}`;
-            try {
-              const j = await resp.json();
-              if (j?.detail) msg += ` — ${j.detail}`;
-            } catch {}
-            throw new Error(msg);
-          }
-          addBtn.textContent = 'Added';
-          await loadHistory();
-        } catch (e) {
-          console.error(e);
-          addBtn.textContent = 'Error';
-          addBtn.disabled = false;
-        }
-      });
-
-      // Torrent details link on MAM
-      const detailsId = it.torrent_id || it.id;
-      const detailsURL = detailsId ? `https://www.myanonamouse.net/t/${encodeURIComponent(detailsId)}` : '';
-
-      tr.innerHTML = `
-        <td>${escapeHtml(it.title || '')}</td>
-        <td>${escapeHtml(it.author || it.author_info || '')}</td>
-        <td>${escapeHtml(it.narrator || it.narrator_info || '')}</td>
-        <td>${escapeHtml(it.format || '')}</td>
-        <td class="right">${formatSize(it.size)}</td>
-        <td class="right">${sl}</td>
-        <td>${escapeHtml(it.uploaded_at || it.added || '')}</td>
-        <td class="center">
-          ${detailsURL ? `<a href="${detailsURL}" target="_blank" rel="noopener noreferrer" title="Open on MAM">🔗</a>` : ''}
-        </td>
-        <td></td>
-      `;
-      tr.lastElementChild.appendChild(addBtn);
-      tbody.appendChild(tr);
-    });
-
-    table.style.display = '';
-    statusEl.textContent = `${rows.length} results shown`;
+    renderSearchRows(lastSearchRows);
     await loadHistory();
   } catch (e) {
     console.error(e);
-    statusEl.textContent = 'Search failed.';
+    statusEl.textContent = `Search failed: ${e.message || 'unknown error'}`;
+  }
+}
+
+function rowMatchesFilters(it) {
+  const contains = (value, needle) => !needle || String(value || '').toLowerCase().includes(needle.toLowerCase());
+  const ft = (searchFilters.filetype?.value || '').toLowerCase();
+  return contains(it.title, searchFilters.title?.value || '')
+    && contains(it.author || it.author_info, searchFilters.author?.value || '')
+    && contains(it.narrator || it.narrator_info, searchFilters.narrator?.value || '')
+    && (!ft || String(it.format || '').toLowerCase().includes(ft));
+}
+
+function renderSearchRows(rows) {
+  tbody.innerHTML = '';
+  const filtered = (rows || []).filter(rowMatchesFilters);
+  filtered.forEach((it) => appendSearchRow(it));
+  table.style.display = filtered.length ? '' : 'none';
+  statusEl.textContent = `${filtered.length} of ${(rows || []).length} result(s) shown`;
+}
+
+function appendSearchRow(it) {
+  const tr = document.createElement('tr');
+  const sl = `${it.seeders ?? '-'} / ${it.leechers ?? '-'}`;
+
+  const addBtn = document.createElement('button');
+  addBtn.textContent = 'Add';
+  addBtn.disabled = !(it.torrent_id || it.id);
+  addBtn.addEventListener('click', async () => addTorrentFromItem(addBtn, it));
+
+  const detailsId = it.torrent_id || it.id;
+  const detailsURL = detailsId ? `https://www.myanonamouse.net/t/${encodeURIComponent(detailsId)}` : '';
+
+  tr.innerHTML = `
+    <td>${escapeHtml(it.title || '')}</td>
+    <td>${escapeHtml(it.author || it.author_info || '')}</td>
+    <td>${escapeHtml(it.narrator || it.narrator_info || '')}</td>
+    <td>${escapeHtml(it.format || '')}</td>
+    <td class="right">${formatSize(it.size)}</td>
+    <td class="right">${sl}</td>
+    <td>${escapeHtml(it.uploaded_at || it.added || '')}</td>
+    <td class="center">${detailsURL ? `<a href="${detailsURL}" target="_blank" rel="noopener noreferrer" title="Open on MAM">🔗</a>` : ''}</td>
+    <td></td>
+  `;
+  tr.lastElementChild.appendChild(addBtn);
+  tbody.appendChild(tr);
+}
+
+async function addTorrentFromItem(addBtn, it) {
+  addBtn.disabled = true;
+  addBtn.textContent = 'Adding…';
+  try {
+    const resp = await fetch('/api/torrents/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        torrent_id: String(it.torrent_id || it.id || ''),
+        title: it.title || '',
+        author: it.author || it.author_info || '',
+        narrator: it.narrator || it.narrator_info || '',
+        is_freeleech: it.is_freeleech
+      })
+    });
+    const j = await resp.json().catch(() => ({}));
+    if (!resp.ok || !j.ok) throw new Error(j.detail || j.message || `HTTP ${resp.status}`);
+    addBtn.textContent = j.state === 'duplicate' ? 'Duplicate' : 'Added';
+    statusEl.textContent = `Sent torrent ${j.torrent_id} to qBittorrent (${j.state}).`;
+    await loadHistory();
+  } catch (e) {
+    console.error(e);
+    addBtn.textContent = 'Error';
+    addBtn.title = e.message || 'Add failed';
+    statusEl.textContent = `Add failed: ${e.message || 'unknown error'}`;
+    addBtn.disabled = false;
   }
 }
 
@@ -223,7 +254,6 @@ async function loadHistory() {
   }
 }
 
-
 // ---------- MAM RSS dashboard ----------
 const feedForm = document.getElementById('feedForm');
 const feedStatus = document.getElementById('feedStatus');
@@ -245,7 +275,34 @@ async function loadFeedsAndItems() {
     feedsBody.innerHTML = '';
     for (const feed of (feedsJson.items || [])) {
       const tr = document.createElement('tr');
-      cellText(tr, feed.name);
+      const nameTd = document.createElement('td');
+      const nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.value = feed.name || '';
+      const saveNameBtn = document.createElement('button');
+      saveNameBtn.textContent = 'Save';
+      saveNameBtn.addEventListener('click', async () => {
+        saveNameBtn.disabled = true;
+        feedStatus.textContent = `Saving ${feed.name}…`;
+        try {
+          const r = await fetch(`/api/feeds/${encodeURIComponent(feed.id)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: nameInput.value.trim() })
+          });
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          feedStatus.textContent = 'Feed name saved.';
+          await loadFeedsAndItems();
+        } catch (e) {
+          console.error('feed rename failed', e);
+          feedStatus.textContent = `Feed rename failed: ${e.message || 'unknown error'}`;
+        } finally {
+          saveNameBtn.disabled = false;
+        }
+      });
+      nameTd.appendChild(nameInput);
+      nameTd.appendChild(saveNameBtn);
+      tr.appendChild(nameTd);
       cellText(tr, feed.kind);
       cellText(tr, feed.url_redacted);
       const action = document.createElement('td');
@@ -301,16 +358,8 @@ async function loadRssItems() {
     addBtn.textContent = 'Add';
     addBtn.disabled = !item.torrent_id;
     addBtn.addEventListener('click', async () => {
-      addBtn.disabled = true;
-      addBtn.textContent = 'Adding…';
-      const resp = await fetch('/api/torrents/add', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ torrent_id: item.torrent_id, title: item.title })
-      });
-      addBtn.textContent = resp.ok ? 'Added' : 'Error';
+      await addTorrentFromItem(addBtn, item);
       await loadRssItems();
-      await loadHistory();
     });
     addTd.appendChild(addBtn);
     tr.appendChild(addTd);

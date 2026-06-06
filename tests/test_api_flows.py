@@ -70,16 +70,21 @@ def test_api_search_uses_preset_and_annotates_history(monkeypatch, tmp_path):
         def __init__(self, base, cookie):
             pass
         async def search(self, payload):
-            assert payload["tor"]["text"] == "m4b dune"
-            assert payload["tor"]["sortType"] == "snatchedDesc"
-            return {"total": 1, "data": [{"id": "123", "title": "Dune M4B", "isFree": "1"}]}
+            assert payload["tor"]["text"] == "dune"
+            assert payload["tor"]["sortType"] == "dateDesc"
+            assert payload["perpage"] == 100
+            return {"total": 2, "data": [
+                {"id": "123", "title": "Dune M4B", "format": "M4B", "isFree": "1"},
+                {"id": "456", "title": "Dune MP3", "format": "MP3", "isFree": "1"},
+            ]}
 
     monkeypatch.setattr(mod, "MamClient", FakeMam)
     client = TestClient(mod.app)
 
-    response = client.get("/api/search?q=dune&window=past_4_months&perpage=25")
+    response = client.get("/api/search?q=dune&window=all&sort=dateDesc&perpage=25")
 
     assert response.status_code == 200
+    assert len(response.json()["items"]) == 1
     item = response.json()["items"][0]
     assert item["canonical_key"] == "mam:torrent:123"
     assert item["grabbed"] is True

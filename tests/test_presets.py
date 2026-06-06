@@ -16,14 +16,28 @@ def test_explicit_future_date_rejected():
 
 
 def test_build_m4b_payload_is_backend_controlled():
-    payload = build_m4b_search_payload(q=" dune ", window="past_4_months", page=2, perpage=25, today=date(2026, 6, 5))
+    payload = build_m4b_search_payload(q=" dune ", window="all", page=2, perpage=25, today=date(2026, 6, 5), sort="seedersDesc")
     tor = payload["tor"]
 
-    assert tor["text"] == "m4b dune"
+    assert tor["text"] == "dune"
     assert tor["searchType"] == "all"
-    assert tor["sortType"] == "snatchedDesc"
+    assert tor["sortType"] == "seedersDesc"
     assert tor["startNumber"] == "50"
     assert payload["perpage"] == 25
-    assert "fileTypes" in tor["srchIn"]
+    assert "description" not in tor["srchIn"]
+    assert "filenames" not in tor["srchIn"]
+    assert "startDate" not in tor
     assert "browse_lang" in tor
     assert 39 in tor["main_cat"]
+
+
+def test_build_m4b_payload_preserves_explicit_date_window():
+    payload = build_m4b_search_payload(q="bobiverse", window="past_12_months", today=date(2026, 6, 5))
+
+    assert payload["tor"]["startDate"] == "2025-06-05"
+
+
+def test_build_m4b_payload_rejects_unknown_sort():
+    payload = build_m4b_search_payload(q="dune", sort="bananaDesc")
+
+    assert payload["tor"]["sortType"] == "snatchedDesc"

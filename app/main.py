@@ -258,20 +258,25 @@ async def api_status():
     }
 
 @app.get("/api/search")
-async def api_search(q: str = "", window: str = "past_4_months", page: int = 0, perpage: int = 25):
+async def api_search(q: str = "", window: str = "all", page: int = 0, perpage: int = 25, sort: str = "snatchedDesc"):
     try:
-        payload = build_m4b_search_payload(q=q, window=window, page=page, perpage=perpage)
+        requested_perpage = min(100, max(1, int(perpage or 25)))
+        # MAM does not expose a reliable M4B-only API filter. Fetch a wider page,
+        # then apply the strict M4B filter server-side so the UI does not show a
+        # mostly-empty page when MAM's first few matches are EPUB/MP3.
+        payload = build_m4b_search_payload(q=q, window=window, page=page, perpage=max(requested_perpage, 100), sort=sort)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     try:
         raw = await MamClient(settings.MAM_BASE, settings.MAM_COOKIE).search(payload)
         items = [normalize_mam_result(item) for item in raw.get("data", [])]
+        items = [item for item in items if item.get("format_confident")]
     except InvalidTorrentId:
         items = []
     except MamError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
     annotated = history_store.annotate_items(items)
-    return {"items": annotated, "page": max(0, page), "perpage": payload["perpage"], "total": raw.get("total") or raw.get("total_found"), "preset": "recent_m4b_snatched", "window": window}
+    return {"items": annotated, "page": max(0, page), "perpage": payload["perpage"], "total": len(annotated), "preset": "m4b_focused", "window": window, "sort": payload["tor"].get("sortType")}
 
 @app.post("/api/torrents/add")
 async def api_add_torrent(body: TorrentAddRequest):
