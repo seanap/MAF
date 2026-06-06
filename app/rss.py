@@ -4,6 +4,7 @@ import re
 import sqlite3
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
@@ -81,6 +82,22 @@ def _text(elem: ET.Element, name: str) -> str:
     return "" if found is None or found.text is None else found.text.strip()
 
 
+def normalize_rss_datetime(value: str | None) -> str:
+    value = (value or "").strip()
+    if not value:
+        return ""
+    try:
+        dt = parsedate_to_datetime(value)
+    except (TypeError, ValueError):
+        try:
+            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return ""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).isoformat()
+
+
 def normalize_rss_items(xml_text: str, *, feed_id: int) -> list[dict[str, Any]]:
     try:
         root = ET.fromstring(xml_text)
@@ -91,6 +108,7 @@ def normalize_rss_items(xml_text: str, *, feed_id: int) -> list[dict[str, Any]]:
         title = _text(elem, "title")
         link = _text(elem, "link")
         guid = _text(elem, "guid")
+        published_at = normalize_rss_datetime(_text(elem, "pubDate") or _text(elem, "dc:date") or _text(elem, "date"))
         tid = extract_torrent_id(link) or extract_torrent_id(guid)
         if not tid:
             continue
@@ -100,6 +118,7 @@ def normalize_rss_items(xml_text: str, *, feed_id: int) -> list[dict[str, Any]]:
             "torrent_id": tid,
             "title": title,
             "details_url": f"https://www.myanonamouse.net/t/{tid}",
+            "site_added_at": published_at,
             "source": "rss",
             "format": "M4B" if "m4b" in title.lower() else "",
         })
@@ -149,6 +168,8 @@ class FeedStore:
                   torrent_id TEXT NOT NULL,
                   title TEXT,
                   details_url TEXT,
+                  site_added_at TEXT,
+                  rss_position INTEGER NOT NULL DEFAULT 0,
                   first_seen_at TEXT NOT NULL,
                   last_seen_at TEXT NOT NULL,
                   UNIQUE(feed_id, canonical_key)
@@ -162,12 +183,16 @@ class FeedStore:
             self._ensure_column(cx, "feeds", "last_refresh_status", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column(cx, "feeds", "last_refresh_message", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column(cx, "feeds", "last_refresh_at", "TEXT NOT NULL DEFAULT ''")
+            self._ensure_column(cx, "rss_items", "site_added_at", "TEXT NOT NULL DEFAULT ''")
+            self._ensure_column(cx, "rss_items", "rss_position", "INTEGER NOT NULL DEFAULT 0")
 
     def _public_feed(self, row: sqlite3.Row) -> dict[str, Any]:
         d = dict(row)
-        # Always recompute the public URL from the secret so older rows created
-        # before redaction fixes cannot leak path/query tokens back to the UI.
-        d["url_redacted"] = redact_url(d.get("url_secret", d.get("url_redacted", "")))
+        # Local/private UI: expose the RSS URL for convenience. Keep url_redacted
+        # as a compatibility alias for older frontend/tests.
+        public_url = d.get("url_secret", d.get("url_redacted", ""))
+        d["url"] = public_url
+        d["url_redacted"] = public_url
         d.pop("url_secret", None)
         for key in ("enabled", "collapsed", "show_in_combined"):
             d[key] = bool(d.get(key))
@@ -261,15 +286,15 @@ class FeedStore:
     def upsert_items(self, feed_id: int, items: list[dict[str, Any]]) -> dict[str, int]:
         ts = now_iso(); created = updated = 0
         with self.connect() as cx:
-            for item in items:
+            for position, item in enumerate(items):
                 before = cx.execute("SELECT id FROM rss_items WHERE feed_id=? AND canonical_key=?", (feed_id, item["canonical_key"])).fetchone()
                 cx.execute(
                     """
-                    INSERT INTO rss_items (feed_id, canonical_key, torrent_id, title, details_url, first_seen_at, last_seen_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(feed_id, canonical_key) DO UPDATE SET title=excluded.title, details_url=excluded.details_url, last_seen_at=excluded.last_seen_at
+                    INSERT INTO rss_items (feed_id, canonical_key, torrent_id, title, details_url, site_added_at, rss_position, first_seen_at, last_seen_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(feed_id, canonical_key) DO UPDATE SET title=excluded.title, details_url=excluded.details_url, site_added_at=COALESCE(NULLIF(excluded.site_added_at, ''), rss_items.site_added_at), rss_position=excluded.rss_position, last_seen_at=excluded.last_seen_at
                     """,
-                    (feed_id, item["canonical_key"], item["torrent_id"], item.get("title"), item.get("details_url"), ts, ts),
+                    (feed_id, item["canonical_key"], item["torrent_id"], item.get("title"), item.get("details_url"), item.get("site_added_at") or "", position, ts, ts),
                 )
                 if before: updated += 1
                 else: created += 1
@@ -291,7 +316,7 @@ class FeedStore:
         """
         if where:
             sql += " WHERE " + " AND ".join(where)
-        sql += " ORDER BY ri.feed_id, ri.last_seen_at DESC"
+        sql += " ORDER BY ri.feed_id, CASE WHEN ri.site_added_at IS NOT NULL AND ri.site_added_at != '' THEN 0 ELSE 1 END, ri.site_added_at DESC, ri.rss_position ASC, ri.id DESC"
         with self.connect() as cx:
             rows = [dict(row) for row in cx.execute(sql, args).fetchall()]
         grouped_counts: dict[int, int] = {}
@@ -306,7 +331,7 @@ class FeedStore:
             if grouped_counts[fid] > row_limit:
                 continue
             out.append(row)
-        out.sort(key=lambda r: r.get("last_seen_at") or "", reverse=True)
+        out.sort(key=lambda r: (1 if (r.get("site_added_at") or "") else 0, r.get("site_added_at") or "", -int(r.get("rss_position") or 0)), reverse=True)
         if limit is not None:
             out = out[:clamp_display_limit(limit)]
         return out

@@ -15,6 +15,9 @@ from app.presets import (
 def test_start_date_month_windows_cross_year():
     assert compute_start_date("past_4_months", today=date(2026, 1, 31)) == "2025-09-30"
     assert compute_start_date("past_12_months", today=date(2026, 2, 28)) == "2025-02-28"
+    assert compute_start_date("past_2_weeks", today=date(2026, 6, 5)) == "2026-05-22"
+    assert compute_start_date("past_1_month", today=date(2026, 6, 5)) == "2026-05-05"
+    assert compute_start_date("past_2_months", today=date(2026, 6, 5)) == "2026-04-05"
     assert compute_start_date("past_3_months", today=date(2026, 6, 5)) == "2026-03-05"
 
 

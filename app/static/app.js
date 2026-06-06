@@ -6,6 +6,9 @@ function formatSize(sz) { const n=Number(sz); if(!Number.isFinite(n)) return sz 
 function parseDate(v) { const t=Date.parse(String(v||'').replace(' ','T')); return Number.isFinite(t) ? t : 0; }
 function lighten(hex, alpha='22') { return /^#[0-9a-fA-F]{6}$/.test(hex||'') ? `${hex}${alpha}` : '#eef6ff55'; }
 async function jsonFetch(url, options={}) { const r=await fetch(url, options); const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.detail||j.message||`HTTP ${r.status}`); return j; }
+function closeFilterMenus(except=null) { document.querySelectorAll('.filter-menu').forEach(x=>{ if(x!==except) x.remove(); }); }
+document.addEventListener('click', e=>{ if(!e.target.closest('.filter-menu') && !e.target.closest('.filter-btn')) closeFilterMenus(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeFilterMenus(); });
 
 // ---------- Excel-ish table controller ----------
 class DataTable {
@@ -40,20 +43,28 @@ class DataTable {
     this.render();
   }
   openFilter(th,col) {
-    document.querySelectorAll('.filter-menu').forEach(x=>x.remove());
-    const menu=document.createElement('div'); menu.className='filter-menu';
-    const search=document.createElement('input'); search.type='text'; search.placeholder='Find values'; menu.appendChild(search);
-    const actions=document.createElement('div');
-    const all=document.createElement('button'); all.type='button'; all.textContent='Select all';
-    const clear=document.createElement('button'); clear.type='button'; clear.textContent='Clear';
-    actions.append(all, clear); menu.appendChild(actions);
-    const list=document.createElement('div'); menu.appendChild(list);
-    const values=this.uniqueValues(col); const current=new Set(this.filters[col.key] || values);
-    const draw=()=>{ const needle=search.value.toLowerCase(); list.innerHTML=''; values.filter(v=>v.toLowerCase().includes(needle)).forEach(v=>{ const lab=document.createElement('label'); const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=current.has(v); cb.addEventListener('change',()=>{ cb.checked ? current.add(v) : current.delete(v); this.filters[col.key]=[...current]; if(current.size===values.length) delete this.filters[col.key]; this.render(); }); lab.append(cb, document.createTextNode(` ${v}`)); list.appendChild(lab); }); };
-    all.onclick=()=>{ values.forEach(v=>current.add(v)); delete this.filters[col.key]; this.render(); draw(); };
-    clear.onclick=()=>{ current.clear(); this.filters[col.key]=[]; this.render(); draw(); };
-    search.oninput=draw; th.appendChild(menu); draw();
-  }
+      closeFilterMenus();
+      const menu=document.createElement('div'); menu.className='filter-menu';
+      menu.addEventListener('click', e=>e.stopPropagation());
+      const search=document.createElement('input'); search.type='text'; search.placeholder='Find values'; menu.appendChild(search);
+      const actions=document.createElement('div'); actions.className='row';
+      const all=document.createElement('button'); all.type='button'; all.textContent='Select all';
+      const none=document.createElement('button'); none.type='button'; none.textContent='Select none';
+      const selectFiltered=document.createElement('button'); selectFiltered.type='button'; selectFiltered.textContent='Select matching';
+      const close=document.createElement('button'); close.type='button'; close.textContent='Close';
+      actions.append(all, none, selectFiltered, close); menu.appendChild(actions);
+      const hint=document.createElement('div'); hint.className='muted'; hint.style.margin='.35rem 0'; hint.textContent='Tip: Select none, search, then Select matching.'; menu.appendChild(hint);
+      const list=document.createElement('div'); menu.appendChild(list);
+      const values=this.uniqueValues(col); const current=new Set(this.filters[col.key] || values);
+      const save=()=>{ this.filters[col.key]=[...current]; if(current.size===values.length) delete this.filters[col.key]; this.render(); };
+      const visibleValues=()=>{ const needle=search.value.toLowerCase(); return values.filter(v=>v.toLowerCase().includes(needle)); };
+      const draw=()=>{ list.innerHTML=''; visibleValues().forEach(v=>{ const lab=document.createElement('label'); const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=current.has(v); cb.addEventListener('change',()=>{ cb.checked ? current.add(v) : current.delete(v); save(); draw(); }); lab.append(cb, document.createTextNode(` ${v}`)); list.appendChild(lab); }); if(!list.children.length) list.innerHTML='<div class="muted">No matching values.</div>'; };
+      all.onclick=()=>{ values.forEach(v=>current.add(v)); save(); draw(); };
+      none.onclick=()=>{ current.clear(); this.filters[col.key]=[]; this.render(); draw(); };
+      selectFiltered.onclick=()=>{ current.clear(); visibleValues().forEach(v=>current.add(v)); save(); draw(); };
+      close.onclick=()=>menu.remove();
+      search.oninput=draw; th.appendChild(menu); search.focus(); draw();
+    }
   passes(row) {
     return this.columns.every(col=>{ const selected=this.filters[col.key]; if(!selected) return true; const val=String(col.value(row) ?? '').trim() || '(blank)'; return selected.includes(val); });
   }
@@ -64,7 +75,6 @@ class DataTable {
     return [...rows].sort((a,b)=>{ let av=col.value(a), bv=col.value(b); if(col.type==='number'){av=Number(av)||0; bv=Number(bv)||0; return (av-bv)*dir;} if(col.type==='date'){return (parseDate(av)-parseDate(bv))*dir;} return String(av??'').localeCompare(String(bv??''), undefined, {numeric:true,sensitivity:'base'})*dir; });
   }
   render() {
-    document.querySelectorAll('.filter-menu').forEach(x=>x.remove());
     const rows=this.sorted(this.rows.filter(r=>this.passes(r)));
     this.tbody.innerHTML=''; rows.forEach(row=>{ const tr=document.createElement('tr'); if(this.opts.rowStyle) tr.setAttribute('style', this.opts.rowStyle(row)||''); this.columns.forEach(col=>{ const td=document.createElement('td'); td.className=col.className||''; const rendered=col.render ? col.render(row) : escapeHtml(col.value(row)); if(rendered instanceof Node) td.appendChild(rendered); else td.innerHTML=rendered; tr.appendChild(td); }); this.tbody.appendChild(tr); });
     this.table.style.display = rows.length ? '' : 'none';
@@ -102,7 +112,7 @@ async function runSearch(){
   const text=(q?.value||'').trim(); const sortType=sortSel?.value||'snatchedDesc'; const windowValue=windowSel?.value||''; const perpage=parseInt(perpageSel?.value||'25',10);
   statusEl.textContent = text ? 'Searching…' : 'Running default 3-month MAM M4B search…';
   const params=new URLSearchParams({q:text, perpage:String(perpage), window:windowValue, sort:sortType});
-  try { const data=await jsonFetch(`/api/search?${params}`); const rows=data.items||[]; searchTable.setRows(rows); statusEl.innerHTML = `${rows.length} result(s). <span class="pill">Preset: ${escapeHtml(data.preset||'')}</span> <span class="pill">Window: ${escapeHtml(data.window||'')}</span> <span class="pill">MAM sort: ${escapeHtml(data.sort||'')}</span>`; await loadHistory(); }
+  try { const data=await jsonFetch(`/api/search?${params}`); const rows=data.items||[]; searchTable.setRows(rows); statusEl.innerHTML = `${rows.length} result(s) shown${data.total !== undefined ? ` of ${data.total}` : ''}. <span class="pill">Preset: ${escapeHtml(data.preset||'')}</span> <span class="pill">Window: ${escapeHtml(data.window||'')}</span> <span class="pill">MAM sort: ${escapeHtml(data.sort||'')}</span>`; await loadHistory(); }
   catch(e){ console.error(e); statusEl.textContent=`Search failed: ${e.message||'unknown error'}`; }
 }
 if(form) form.addEventListener('submit', e=>{ e.preventDefault(); runSearch(); });
@@ -125,25 +135,26 @@ const feedForm=$('feedForm'), feedStatus=$('feedStatus');
 function initRssTable(){ rssTable = new DataTable($('rssItems'), [
   {key:'feed', label:'Feed', sortable:true, filter:true, value:r=>r.feed_name||r.feed_id||''},
   {key:'title', label:'Title', sortable:true, filter:true, value:r=>r.title||''},
-  {key:'seen', label:'Seen', type:'date', sortable:true, value:r=>r.last_seen_at||''},
+  {key:'added', label:'Added', type:'date', sortable:true, value:r=>r.site_added_at||r.first_seen_at||r.last_seen_at||''},
   {key:'mam', label:'MAM', className:'center', value:r=>r.torrent_id||'', render:r=>r.details_url?`<a href="${escapeHtml(r.details_url)}" target="_blank" rel="noopener noreferrer">MAM</a>`:''},
   {key:'add', label:'Add', value:r=>'', render:r=>actionButton('Add', async e=>{ await addTorrentFromItem(e.currentTarget,r); await loadRssItems(); }, !r.torrent_id)},
   {key:'hide', label:'Hide', value:r=>'', render:r=>actionButton('Hide', async()=>{ await jsonFetch('/api/history/hide',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({canonical_key:r.canonical_key})}); await loadRssItems(); })},
-], {rowStyle:r=>`background:${lighten(r.feed_color)}`}); }
+], {rowStyle:r=>`background:${lighten(r.feed_color)}`}); rssTable.sort={key:'added', dir:'desc'}; }
 async function loadFeedsAndItems(){
   if(!$('feeds')) return;
   try { const feedsJson=await jsonFetch('/api/feeds'); const body=$('feeds').querySelector('tbody'); body.innerHTML='';
     (feedsJson.items||[]).forEach(feed=>{ const tr=document.createElement('tr'); tr.className='feed-controls';
-      tr.innerHTML=`<td><input type="color" value="${escapeHtml(feed.color||'#eef6ff')}"></td><td><input type="text" value="${escapeHtml(feed.name||'')}"></td><td><select><option value="author">Author</option><option value="series">Series</option><option value="narrator">Narrator</option><option value="custom">Custom</option></select></td><td><span class="muted">${escapeHtml(feed.url_redacted||'')}</span><input class="feed-url-placeholder" type="text" placeholder="Paste new URL only if changing"></td><td class="center"><input type="checkbox" ${feed.enabled?'checked':''}></td><td class="center"><input type="checkbox" ${feed.show_in_combined?'checked':''}></td><td class="center"><input type="checkbox" ${feed.collapsed?'checked':''}></td><td><input type="number" min="1" max="500" value="${feed.display_limit||15}" style="width:5rem"></td><td class="muted">${escapeHtml(feed.last_refresh_status||'')} ${escapeHtml(feed.last_refresh_message||'')}</td><td></td>`;
-      const kindSel=tr.children[2].querySelector('select'); kindSel.value=feed.kind||'custom'; const [colorEl,nameEl]=[tr.children[0].querySelector('input'),tr.children[1].querySelector('input')]; const urlEl=tr.children[3].querySelector('input'); const enabledEl=tr.children[4].querySelector('input'); const showEl=tr.children[5].querySelector('input'); const collapsedEl=tr.children[6].querySelector('input'); const limitEl=tr.children[7].querySelector('input'); const actions=tr.lastElementChild;
-      actions.appendChild(actionButton('Save', async()=>{ const payload={name:nameEl.value.trim(),kind:kindSel.value,enabled:enabledEl.checked,color:colorEl.value,show_in_combined:showEl.checked,collapsed:collapsedEl.checked,display_limit:parseInt(limitEl.value||'15',10)}; if(urlEl.value.trim()) payload.url=urlEl.value.trim(); await jsonFetch(`/api/feeds/${feed.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); feedStatus.textContent='Feed saved.'; await loadFeedsAndItems(); }));
-      actions.appendChild(actionButton('Refresh', async()=>{ const j=await jsonFetch(`/api/feeds/${feed.id}/refresh`,{method:'POST'}); feedStatus.textContent=j.ok?`Fetched ${j.fetched_count} item(s)`:`Refresh failed: ${j.message||'unknown error'}`; await loadFeedsAndItems(); }));
+      tr.innerHTML=`<td><input type="color" value="${escapeHtml(feed.color||'#eef6ff')}"></td><td><input type="text" value="${escapeHtml(feed.name||'')}"></td><td><span class="muted">${escapeHtml(feed.url||feed.url_redacted||'')}</span><input class="feed-url-placeholder" type="text" placeholder="Paste new URL only if changing"></td><td class="center"><input type="checkbox" ${feed.enabled?'checked':''}></td><td class="center"><input type="checkbox" ${feed.show_in_combined?'checked':''}></td><td class="center"><input type="checkbox" ${feed.collapsed?'checked':''}></td><td><input type="number" min="1" max="500" value="${feed.display_limit||15}" style="width:5rem"></td><td class="muted">${escapeHtml(feed.last_refresh_status||'')} ${escapeHtml(feed.last_refresh_message||'')}</td><td></td>`;
+      const [colorEl,nameEl]=[tr.children[0].querySelector('input'),tr.children[1].querySelector('input')]; const urlEl=tr.children[2].querySelector('input'); const enabledEl=tr.children[3].querySelector('input'); const showEl=tr.children[4].querySelector('input'); const collapsedEl=tr.children[5].querySelector('input'); const limitEl=tr.children[6].querySelector('input'); const actions=tr.lastElementChild;
+       actions.appendChild(actionButton('Save', async()=>{ const payload={name:nameEl.value.trim(),enabled:enabledEl.checked,color:colorEl.value,show_in_combined:showEl.checked,collapsed:collapsedEl.checked,display_limit:parseInt(limitEl.value||'15',10)}; if(urlEl.value.trim()) payload.url=urlEl.value.trim(); await jsonFetch(`/api/feeds/${feed.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); feedStatus.textContent='Feed saved.'; await loadFeedsAndItems(); }));
+actions.appendChild(actionButton('Refresh', async()=>{ const j=await jsonFetch(`/api/feeds/${feed.id}/refresh`,{method:'POST'}); feedStatus.textContent=j.ok?`Fetched ${j.fetched_count} item(s)`:`Refresh failed: ${j.message||'unknown error'}`; await loadFeedsAndItems(); }));
       actions.appendChild(actionButton('Delete', async()=>{ if(!confirm(`Delete feed ${feed.name}?`)) return; await fetch(`/api/feeds/${feed.id}`,{method:'DELETE'}); await loadFeedsAndItems(); }));
       body.appendChild(tr);
     }); await loadRssItems(); } catch(e){ console.error('feed load failed',e); if(feedStatus) feedStatus.textContent=`Failed to load feeds: ${e.message||'unknown error'}`; }
 }
 async function loadRssItems(){ try { const j=await jsonFetch('/api/rss/items?combined=true&include_hidden=false&include_grabbed=false'); rssTable.setRows(j.items||[]); } catch(e){ console.error('rss items failed',e); } }
-if(feedForm) feedForm.addEventListener('submit', async e=>{ e.preventDefault(); const payload={name:$('feedName').value.trim(),kind:$('feedKind').value,url:$('feedUrl').value.trim(),enabled:true,color:$('feedColor').value,display_limit:parseInt($('feedLimit').value||'15',10)}; try{ feedStatus.textContent='Saving feed…'; await jsonFetch('/api/feeds',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); $('feedUrl').value=''; feedStatus.textContent='Feed saved.'; await loadFeedsAndItems(); } catch(err){ feedStatus.textContent=`Feed save failed: ${err.message||'unknown error'}`; }});
+if(feedForm) feedForm.addEventListener('submit', async e=>{ e.preventDefault(); const payload={name:$('feedName').value.trim(),url:$('feedUrl').value.trim(),enabled:true,color:$('feedColor').value,display_limit:parseInt($('feedLimit').value||'15',10)}; try{ feedStatus.textContent='Saving feed…'; await jsonFetch('/api/feeds',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); $('feedUrl').value=''; feedStatus.textContent='Feed saved.'; await loadFeedsAndItems(); } catch(err){ feedStatus.textContent=`Feed save failed: ${err.message||'unknown error'}`; }});
 if($('refreshFeedsBtn')) $('refreshFeedsBtn').addEventListener('click', async()=>{ const feeds=await jsonFetch('/api/feeds'); for(const feed of feeds.items||[]) if(feed.enabled) await fetch(`/api/feeds/${feed.id}/refresh`,{method:'POST'}); await loadFeedsAndItems(); });
 
+if($('toggleFeedsBtn')) $('toggleFeedsBtn').addEventListener('click',()=>{ const panel=$('feedSettings'); const hidden=panel.classList.toggle('hidden'); $('toggleFeedsBtn').setAttribute('aria-expanded', String(!hidden)); $('toggleFeedsBtn').textContent = `${hidden ? '▸' : '▾'} Feed Settings`; });
 initSearchTable(); initRssTable(); loadFeedsAndItems();

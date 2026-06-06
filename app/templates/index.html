@@ -527,6 +527,9 @@
             <select id="window">
               <option value="">Auto window</option>
               <option value="all">All time</option>
+              <option value="past_2_weeks">Past 2 weeks</option>
+              <option value="past_1_month">Past 1 month</option>
+              <option value="past_2_months">Past 2 months</option>
               <option value="past_3_months">Past 3 months</option>
               <option value="past_4_months">Past 4 months</option>
               <option value="past_12_months">Past 12 months</option>
@@ -546,23 +549,26 @@
         <aside class="panel-title">
           <span class="eyebrow">Watch Protocols</span>
           <h3>MAM RSS Watch Dashboard</h3>
-          <p>Rename, color, collapse, limit, and include feeds in the combined list. Secrets stay server-side and redacted, because we are not animals.</p>
+          <p>Combined items stay visible as the live book stream. Feed management is tucked away behind the archive settings toggle, because dashboards should not wave every wrench in your face.</p>
         </aside>
         <div>
-          <form id="feedForm" class="row">
-            <input id="feedName" type="text" placeholder="Feed name" />
-            <select id="feedKind"><option value="author">Author</option><option value="series">Series</option><option value="narrator">Narrator</option><option value="custom">Custom MAM RSS</option></select>
-            <input id="feedUrl" type="text" placeholder="MAM RSS URL (stored server-side, redacted in UI)" />
-            <input id="feedColor" type="color" value="#eef6ff" title="Feed row color" />
-            <input id="feedLimit" type="number" min="1" max="500" value="15" title="Default results per feed" />
-            <button type="submit">Save Feed</button>
-            <button type="button" id="refreshFeedsBtn">Refresh Enabled</button>
-          </form>
-          <div id="feedStatus" class="muted" style="margin-top:0.7rem"></div>
+          <button id="toggleFeedsBtn" class="filter-btn" type="button" aria-expanded="false" aria-controls="feedSettings">▸ Feed Settings</button>
+          <div id="feedSettings" class="hidden" style="margin-top:0.75rem;">
+            <form id="feedForm" class="row">
+              <input id="feedName" type="text" placeholder="Feed name" />
+              <input id="feedUrl" type="text" placeholder="MAM RSS URL" />
+              <input id="feedColor" type="color" value="#eef6ff" title="Feed row color" />
+              <input id="feedLimit" type="number" min="1" max="500" value="15" title="Default results per feed" />
+              <button type="submit">Save Feed</button>
+              <button type="button" id="refreshFeedsBtn">Refresh Enabled</button>
+            </form>
+            <div id="feedStatus" class="muted" style="margin-top:0.7rem"></div>
+            <div class="archive-rule"></div>
+            <h4>Feeds</h4>
+            <table id="feeds"><thead><tr><th>Color</th><th>Name</th><th>URL</th><th>Enabled</th><th>Combined</th><th>Collapsed</th><th>Limit</th><th>Status</th><th>Actions</th></tr></thead><tbody></tbody></table>
+          </div>
           <div class="archive-rule"></div>
-          <h4>Feeds</h4>
-          <table id="feeds"><thead><tr><th>Color</th><th>Name</th><th>Kind</th><th>URL</th><th>Enabled</th><th>Combined</th><th>Collapsed</th><th>Limit</th><th>Status</th><th>Actions</th></tr></thead><tbody></tbody></table>
-          <h4>Combined RSS Items <span class="muted">(hidden/grabbed omitted)</span></h4>
+          <h4>Combined RSS Items (newest MAM additions first; hidden/grabbed omitted)</h4>
           <table id="rssItems"><thead></thead><tbody></tbody></table>
         </div>
       </div>

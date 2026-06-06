@@ -91,18 +91,44 @@ def test_api_search_uses_preset_and_annotates_history(monkeypatch, tmp_path):
     assert "dl" not in item
 
 
-def test_feed_api_redacts_and_lists_items(tmp_path):
+def test_api_search_respects_requested_perpage_after_m4b_filter(monkeypatch, tmp_path):
+    mod = load_app(tmp_path)
+
+    class FakeMam:
+        def __init__(self, base, cookie):
+            pass
+        async def search(self, payload):
+            assert payload["perpage"] == 100  # fetch wide for server-side M4B filtering
+            return {"total": 40, "data": [
+                {"id": str(i), "title": f"Book {i} M4B", "format": "M4B", "isFree": "1"}
+                for i in range(40)
+            ]}
+
+    monkeypatch.setattr(mod, "MamClient", FakeMam)
+    client = TestClient(mod.app)
+
+    response = client.get("/api/search?q=&window=past_3_months&sort=snatchedDesc&perpage=25")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) == 25
+    assert data["shown"] == 25
+    assert data["total"] == 40
+    assert data["perpage"] == 25
+
+
+def test_feed_api_exposes_local_urls_and_lists_items(tmp_path):
     mod = load_app(tmp_path)
     client = TestClient(mod.app)
 
     created = client.post("/api/feeds", json={"name": "Series", "kind": "series", "url": "https://www.myanonamouse.net/rss.php?passkey=secret"})
 
     assert created.status_code == 200
-    assert "secret" not in str(created.json())
+    assert created.json()["url"] == "https://www.myanonamouse.net/rss.php?passkey=secret"
     assert "url_secret" not in created.json()
     listed = client.get("/api/feeds")
     assert listed.status_code == 200
-    assert "secret" not in str(listed.json())
+    assert listed.json()["items"][0]["url"].endswith("passkey=secret")
 
 
 def test_feed_api_patch_and_delete(tmp_path):
@@ -114,7 +140,7 @@ def test_feed_api_patch_and_delete(tmp_path):
     patched = client.patch(f"/api/feeds/{created.json()['id']}", json={"name": "Updated", "enabled": False})
     assert patched.status_code == 200
     assert patched.json()["name"] == "Updated"
-    assert "secret" not in str(patched.json())
+    assert patched.json()["url"].endswith("passkey=secret")
     deleted = client.delete(f"/api/feeds/{created.json()['id']}")
     assert deleted.status_code == 200
 

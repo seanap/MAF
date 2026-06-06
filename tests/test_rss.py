@@ -41,12 +41,13 @@ def test_normalize_rss_items_strips_private_urls():
     assert "secret" not in repr(items[0])
 
 
-def test_feed_store_create_redacts_url(tmp_path: Path):
+def test_feed_store_create_exposes_url_for_local_ui(tmp_path: Path):
     store = FeedStore(tmp_path / "feeds.sqlite3")
     feed = store.create_feed("Author", "author", "https://www.myanonamouse.net/rss.php?passkey=secret")
 
     assert feed["id"] == 1
-    assert "secret" not in feed["url_redacted"]
+    assert feed["url"] == "https://www.myanonamouse.net/rss.php?passkey=secret"
+    assert feed["url_redacted"] == feed["url"]
     assert "url_secret" not in feed
 
 
@@ -60,6 +61,7 @@ def test_feed_store_qol_fields_and_combined_visibility(tmp_path: Path):
     assert one["display_limit"] == 1
     assert two["show_in_combined"] is False
     assert "url_secret" not in repr(one)
+    assert "passkey=one" in one["url"]
 
     store.upsert_items(one["id"], [
         {"canonical_key": "mam:torrent:1", "torrent_id": "1", "title": "A", "details_url": "https://www.myanonamouse.net/t/1"},
@@ -86,3 +88,30 @@ def test_feed_store_patch_validates_color_and_clamps_limit(tmp_path: Path):
     assert updated["show_in_combined"] is False
     with pytest.raises(ValueError):
         store.update_feed(feed["id"], color="red")
+
+
+
+def test_rss_items_use_pubdate_for_recent_per_feed_and_combined_order(tmp_path: Path):
+    store = FeedStore(tmp_path / "feeds.sqlite3")
+    one = store.create_feed("One", "series", "https://www.myanonamouse.net/rss.php?passkey=one", display_limit=2)
+    two = store.create_feed("Two", "series", "https://www.myanonamouse.net/rss.php?passkey=two", display_limit=2)
+    store.upsert_items(one["id"], [
+        {"canonical_key": "mam:torrent:old", "torrent_id": "1", "title": "Old", "details_url": "https://www.myanonamouse.net/t/1", "site_added_at": "2024-01-01T00:00:00+00:00"},
+        {"canonical_key": "mam:torrent:new", "torrent_id": "2", "title": "New", "details_url": "https://www.myanonamouse.net/t/2", "site_added_at": "2026-01-01T00:00:00+00:00"},
+        {"canonical_key": "mam:torrent:mid", "torrent_id": "3", "title": "Mid", "details_url": "https://www.myanonamouse.net/t/3", "site_added_at": "2025-01-01T00:00:00+00:00"},
+    ])
+    store.upsert_items(two["id"], [
+        {"canonical_key": "mam:torrent:two-new", "torrent_id": "4", "title": "Two New", "details_url": "https://www.myanonamouse.net/t/4", "site_added_at": "2026-06-01T00:00:00+00:00"},
+    ])
+
+    combined = store.list_items(combined=True)
+
+    assert [item["title"] for item in combined] == ["Two New", "New", "Mid"]
+    assert "Old" not in [item["title"] for item in combined]
+
+
+def test_normalize_rss_items_captures_pubdate():
+    xml = """<?xml version="1.0"?><rss><channel><item><title>Book M4B</title><link>https://www.myanonamouse.net/t/123</link><pubDate>Sat, 06 Jun 2026 12:00:00 GMT</pubDate></item></channel></rss>"""
+    item = normalize_rss_items(xml, feed_id=1)[0]
+
+    assert item["site_added_at"] == "2026-06-06T12:00:00+00:00"

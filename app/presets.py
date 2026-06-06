@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import calendar
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timezone, timedelta
 
 AUDIOBOOK_CATEGORY_IDS = [39, 50, 83, 51, 97, 40, 41, 106, 42, 52, 98, 54, 55, 43, 99, 84, 56, 45, 57, 85, 87, 119, 88, 59, 47, 53, 89, 100, 0]
 TARGETED_SEARCH_FIELDS = ["title", "author", "narrator", "series"]
 ADVANCED_SEARCH_FIELDS = ["title", "description", "tags", "author", "narrator", "series", "fileTypes", "filenames"]
-WINDOW_MONTHS = {"past_3_months": 3, "past_4_months": 4, "past_12_months": 12}
+WINDOW_DAYS = {"past_2_weeks": 14}
+WINDOW_MONTHS = {"past_1_month": 1, "past_2_months": 2, "past_3_months": 3, "past_4_months": 4, "past_12_months": 12}
 SORT_TYPES = {"snatchedDesc", "seedersDesc", "dateDesc", "sizeDesc"}
 
 
@@ -23,6 +24,8 @@ def compute_start_date(window: str, *, today: date | None = None) -> str:
     window = (window or "all").strip()
     if window in {"all", ""}:
         return ""
+    if window in WINDOW_DAYS:
+        return (today - timedelta(days=WINDOW_DAYS[window])).isoformat()
     if window in WINDOW_MONTHS:
         return _subtract_months(today, WINDOW_MONTHS[window]).isoformat()
     try:
@@ -98,7 +101,7 @@ def build_search_payload_for_query(*, q: str = "", window: str = "", page: int =
 def presets_metadata() -> dict:
     return {
         "default": "default_advanced_3mo",
-        "windows": ["all", "past_3_months", "past_4_months", "past_12_months", "YYYY-MM-DD"],
+        "windows": ["all", "past_2_weeks", "past_1_month", "past_2_months", "past_3_months", "past_4_months", "past_12_months", "YYYY-MM-DD"],
         "categories": AUDIOBOOK_CATEGORY_IDS,
         "targeted_fields": TARGETED_SEARCH_FIELDS,
         "advanced_fields": ADVANCED_SEARCH_FIELDS,

@@ -239,6 +239,7 @@ class HistoryStateRequest(BaseModel):
 
 class FeedCreateRequest(BaseModel):
     name: str
+    # Kind is kept as an API compatibility no-op; the UI no longer exposes it.
     kind: str = "custom"
     url: str
     enabled: bool = True
@@ -288,7 +289,8 @@ async def api_search(q: str = "", window: str = "", page: int = 0, perpage: int 
     except MamError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
     annotated = history_store.annotate_items(items)
-    return {"items": annotated, "page": max(0, page), "perpage": payload["perpage"], "total": len(annotated), "shown": min(len(annotated), requested_perpage), **meta}
+    shown_items = annotated[:requested_perpage]
+    return {"items": shown_items, "page": max(0, page), "perpage": requested_perpage, "total": len(annotated), "shown": len(shown_items), **meta}
 
 @app.post("/api/torrents/add")
 async def api_add_torrent(body: TorrentAddRequest):
