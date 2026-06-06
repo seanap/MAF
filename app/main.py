@@ -2,11 +2,12 @@ import os, json, re
 from pathlib import Path
 import httpx
 from app.history_store import HistoryStore
+from app.abs_client import AbsClient, AbsError, choose_abs_match
 from app.mam import InvalidTorrentId, MamClient, MamError, normalize_mam_result, validate_torrent_id
 from app.models import canonical_key
-from app.presets import build_m4b_search_payload, presets_metadata
+from app.presets import build_search_payload_for_query, presets_metadata
 from app.qbit import QbitClient, QbitError
-from app.rss import FeedStore, normalize_rss_items
+from app.rss import FeedStore, normalize_rss_items, redact_url
 from app.wedge import decide_wedge
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -115,6 +116,9 @@ class Settings:
         self.WEDGE_MODE = cfg.get("WEDGE_MODE") or os.getenv("WEDGE_MODE", "smart")
         self.WEDGE_UNKNOWN_FALLBACK = env_bool("WEDGE_UNKNOWN_FALLBACK", True)
         self.ABS_URL = (cfg.get("ABS_URL") or os.getenv("ABS_URL", "http://192.168.1.9:13378")).rstrip("/")
+        self.ABS_TOKEN = cfg.get("ABS_TOKEN") or os.getenv("ABS_TOKEN", "")
+        self.ABS_LIBRARY_ID = cfg.get("ABS_LIBRARY_ID") or os.getenv("ABS_LIBRARY_ID", "")
+        self.ABS_DIRECT_ITEM_URLS = env_bool("ABS_DIRECT_ITEM_URLS", False)
 
         self.QB_CATEGORY = cfg.get("QB_CATEGORY") or os.getenv("QB_CATEGORY", "mam-audiofinder")
         self.QB_POSTIMPORT_CATEGORY = cfg.get("QB_POSTIMPORT_CATEGORY") or os.getenv("QB_POSTIMPORT_CATEGORY", "")
@@ -238,12 +242,20 @@ class FeedCreateRequest(BaseModel):
     kind: str = "custom"
     url: str
     enabled: bool = True
+    color: str | None = None
+    collapsed: bool = False
+    show_in_combined: bool = True
+    display_limit: int = 15
 
 class FeedPatchRequest(BaseModel):
     name: str | None = None
     kind: str | None = None
     url: str | None = None
     enabled: bool | None = None
+    color: str | None = None
+    collapsed: bool | None = None
+    show_in_combined: bool | None = None
+    display_limit: int | None = None
 
 @app.get("/api/presets")
 async def api_presets():
@@ -258,13 +270,13 @@ async def api_status():
     }
 
 @app.get("/api/search")
-async def api_search(q: str = "", window: str = "all", page: int = 0, perpage: int = 25, sort: str = "snatchedDesc"):
+async def api_search(q: str = "", window: str = "", page: int = 0, perpage: int = 25, sort: str = "snatchedDesc"):
     try:
         requested_perpage = min(100, max(1, int(perpage or 25)))
         # MAM does not expose a reliable M4B-only API filter. Fetch a wider page,
         # then apply the strict M4B filter server-side so the UI does not show a
         # mostly-empty page when MAM's first few matches are EPUB/MP3.
-        payload = build_m4b_search_payload(q=q, window=window, page=page, perpage=max(requested_perpage, 100), sort=sort)
+        payload, meta = build_search_payload_for_query(q=q, window=window, page=page, perpage=max(requested_perpage, 100), sort=sort)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     try:
@@ -276,7 +288,7 @@ async def api_search(q: str = "", window: str = "all", page: int = 0, perpage: i
     except MamError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
     annotated = history_store.annotate_items(items)
-    return {"items": annotated, "page": max(0, page), "perpage": payload["perpage"], "total": len(annotated), "preset": "m4b_focused", "window": window, "sort": payload["tor"].get("sortType")}
+    return {"items": annotated, "page": max(0, page), "perpage": payload["perpage"], "total": len(annotated), "shown": min(len(annotated), requested_perpage), **meta}
 
 @app.post("/api/torrents/add")
 async def api_add_torrent(body: TorrentAddRequest):
@@ -306,6 +318,24 @@ async def api_add_torrent(body: TorrentAddRequest):
 @app.get("/api/history")
 def api_history():
     return {"items": history_store.list_history()}
+
+@app.post("/api/history/{row_id}/resolve-abs")
+async def api_resolve_abs(row_id: int):
+    row = history_store.get_by_id(row_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="History row not found")
+    client = AbsClient(settings.ABS_URL, settings.ABS_TOKEN, settings.ABS_LIBRARY_ID)
+    if not client.configured:
+        updated = history_store.update_abs(row_id, status="not_configured") or row
+        return {"ok": False, "status": "not_configured", "item": updated}
+    try:
+        items = await client.search_books(row.get("title") or "")
+        match = choose_abs_match(items, title=row.get("title") or "", author=row.get("author") or "", base_url=settings.ABS_URL, direct_item_urls=settings.ABS_DIRECT_ITEM_URLS)
+    except AbsError as exc:
+        updated = history_store.update_abs(row_id, status="error") or row
+        return {"ok": False, "status": "error", "message": str(exc), "item": updated}
+    updated = history_store.update_abs(row_id, abs_item_id=match.item_id, abs_item_url=match.item_url, status=match.status) or row
+    return {"ok": match.status == "matched", "status": match.status, "item": updated}
 
 @app.delete("/api/history/{row_id}")
 def api_delete_history(row_id: int):
@@ -340,14 +370,14 @@ def api_feeds():
 @app.post("/api/feeds")
 def api_create_feed(body: FeedCreateRequest):
     try:
-        return feed_store.create_feed(body.name, body.kind, body.url, body.enabled)
+        return feed_store.create_feed(body.name, body.kind, body.url, body.enabled, color=body.color, collapsed=body.collapsed, show_in_combined=body.show_in_combined, display_limit=body.display_limit)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
 @app.patch("/api/feeds/{feed_id}")
 def api_patch_feed(feed_id: int, body: FeedPatchRequest):
     try:
-        updated = feed_store.update_feed(feed_id, name=body.name, kind=body.kind, url=body.url, enabled=body.enabled)
+        updated = feed_store.update_feed(feed_id, name=body.name, kind=body.kind, url=body.url, enabled=body.enabled, color=body.color, collapsed=body.collapsed, show_in_combined=body.show_in_combined, display_limit=body.display_limit)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     if not updated:
@@ -360,8 +390,29 @@ def api_delete_feed(feed_id: int):
     return {"ok": True}
 
 @app.get("/api/rss/items")
-def api_rss_items(feed_id: int | None = None):
-    return {"items": history_store.annotate_items(feed_store.list_items(feed_id))}
+def api_rss_items(feed_id: int | None = None, combined: bool = True, include_hidden: bool = False, include_grabbed: bool = False, limit: int | None = None):
+    items = history_store.annotate_items(feed_store.list_items(feed_id, combined=combined, limit=None, apply_display_limit=False))
+    if not include_hidden:
+        items = [item for item in items if not item.get("hidden")]
+    if not include_grabbed:
+        items = [item for item in items if not item.get("grabbed")]
+    if combined and not feed_id:
+        counts = {}
+        visible = []
+        for item in items:
+            fid = int(item.get("feed_id") or 0)
+            counts[fid] = counts.get(fid, 0) + 1
+            if counts[fid] <= int(item.get("feed_display_limit") or 15):
+                visible.append(item)
+        items = visible
+    if limit is not None:
+        items = items[:max(1, min(500, int(limit)))]
+    return {"items": items}
+
+def _safe_refresh_message(exc: Exception) -> str:
+    msg = str(exc) or exc.__class__.__name__
+    msg = re.sub(r"https://[^\s'\"]+", lambda m: redact_url(m.group(0)), msg)
+    return msg[:300]
 
 @app.post("/api/feeds/{feed_id}/refresh")
 async def api_refresh_feed(feed_id: int):
@@ -378,7 +429,10 @@ async def api_refresh_feed(feed_id: int):
         items = normalize_rss_items(resp.text, feed_id=feed_id)[:500]
         counts = feed_store.upsert_items(feed_id, items)
     except Exception as exc:
-        return {"ok": False, "feed_id": feed_id, "fetched_count": 0, "created_count": 0, "updated_count": 0, "skipped_count": 0, "error_count": 1, "message": str(exc)}
+        safe_message = _safe_refresh_message(exc)
+        feed_store.update_feed(feed_id, last_refresh_status="error", last_refresh_message=safe_message, last_refresh_at=__import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat())
+        return {"ok": False, "feed_id": feed_id, "fetched_count": 0, "created_count": 0, "updated_count": 0, "skipped_count": 0, "error_count": 1, "message": safe_message}
+    feed_store.update_feed(feed_id, last_refresh_status="ok", last_refresh_message=f"Fetched {len(items)} item(s)", last_refresh_at=__import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat())
     return {"ok": True, "feed_id": feed_id, "fetched_count": len(items), "skipped_count": 0, "error_count": 0, **counts}
 
 @app.get("/", response_class=HTMLResponse)

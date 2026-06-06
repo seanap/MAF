@@ -43,6 +43,15 @@ class HistoryStore:
                 )
                 """
             )
+            cols = {row["name"] for row in cx.execute("PRAGMA table_info(item_state)")}
+            for column, ddl in {
+                "abs_item_id": "TEXT NOT NULL DEFAULT ''",
+                "abs_item_url": "TEXT NOT NULL DEFAULT ''",
+                "abs_resolved_at": "TEXT NOT NULL DEFAULT ''",
+                "abs_match_status": "TEXT NOT NULL DEFAULT ''",
+            }.items():
+                if column not in cols:
+                    cx.execute(f"ALTER TABLE item_state ADD COLUMN {column} {ddl}")
 
     def _row(self, key: str) -> dict[str, Any] | None:
         with self.connect() as cx:
@@ -132,6 +141,20 @@ class HistoryStore:
         with self.connect() as cx:
             rows = cx.execute("SELECT * FROM item_state ORDER BY updated_at DESC LIMIT ?", (limit,)).fetchall()
         return [dict(row) for row in rows]
+
+    def get_by_id(self, row_id: int) -> dict[str, Any] | None:
+        with self.connect() as cx:
+            row = cx.execute("SELECT * FROM item_state WHERE id=?", (row_id,)).fetchone()
+        return dict(row) if row else None
+
+    def update_abs(self, row_id: int, *, abs_item_id: str = "", abs_item_url: str = "", status: str = "") -> dict[str, Any] | None:
+        ts = now_iso()
+        with self.connect() as cx:
+            cx.execute(
+                "UPDATE item_state SET abs_item_id=?, abs_item_url=?, abs_match_status=?, abs_resolved_at=?, updated_at=? WHERE id=?",
+                (abs_item_id or "", abs_item_url or "", status or "", ts, ts, row_id),
+            )
+        return self.get_by_id(row_id)
 
     def delete_id(self, row_id: int) -> None:
         with self.connect() as cx:

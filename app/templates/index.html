@@ -10,22 +10,33 @@
   <link rel="apple-touch-icon" href="/static/favicon-180.png">
   <meta name="theme-color" content="#f5c518">
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 2rem; }
-    header { display:flex; align-items:center; gap:0.75rem; margin-bottom: 1rem; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 2rem; color:#222; }
+    header { display:flex; align-items:center; gap:0.75rem; margin-bottom: 1rem; flex-wrap:wrap; }
     h1 { font-size: 1.4rem; margin: 0; }
     .logo { height: 1.6rem; width: auto; }
-    .card { border: 1px solid #ddd; border-radius: 12px; padding: 1rem; max-width: 1100px; }
-    .row { display:flex; gap:0.5rem; flex-wrap: wrap; }
-    input[type="text"] { flex:1; min-width: 260px; padding:0.6rem; border:1px solid #ccc; border-radius:8px; }
-    select { padding:0.6rem; border:1px solid #ccc; border-radius:8px; }
-    button { padding:0.6rem 0.9rem; border:1px solid #888; background:#f6f6f6; border-radius:8px; cursor:pointer; }
-    table { width:100%; border-collapse: collapse; margin-top: 1rem; }
-    th, td { padding: 0.5rem; border-bottom: 1px solid #eee; text-align: left; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 1rem; max-width: 1280px; margin-top:1rem; }
+    .row { display:flex; gap:0.5rem; flex-wrap: wrap; align-items:center; }
+    input[type="text"], input[type="number"], input[type="color"] { padding:0.55rem; border:1px solid #ccc; border-radius:8px; }
+    input[type="text"] { flex:1; min-width: 220px; }
+    select { padding:0.55rem; border:1px solid #ccc; border-radius:8px; }
+    button { padding:0.55rem 0.8rem; border:1px solid #888; background:#f6f6f6; border-radius:8px; cursor:pointer; }
+    button:disabled { opacity:.55; cursor:not-allowed; }
+    table { width:100%; border-collapse: collapse; margin-top: 1rem; font-size:.93rem; }
+    th, td { padding: 0.45rem; border-bottom: 1px solid #eee; text-align: left; vertical-align:top; }
+    th { background:#fafafa; position:relative; white-space:nowrap; }
     .muted { color:#666; font-size:0.9rem; }
     .right { text-align:right; }
     .center { text-align: center; }
-    .import-form input, .import-form select { padding:4px 6px; }
-    .import-form button { padding:4px 10px; }
+    .pill { display:inline-block; border:1px solid #ddd; border-radius:999px; padding:.15rem .45rem; background:#fafafa; font-size:.85rem; }
+    .th-sort { cursor:pointer; user-select:none; }
+    .filter-btn { padding:.1rem .35rem; margin-left:.25rem; border-radius:5px; font-size:.8rem; }
+    .filter-menu { position:absolute; z-index:20; top:100%; left:0; min-width:220px; max-height:320px; overflow:auto; background:white; border:1px solid #bbb; border-radius:8px; box-shadow:0 8px 22px rgba(0,0,0,.15); padding:.5rem; white-space:normal; }
+    .filter-menu label { display:block; margin:.2rem 0; }
+    .filter-menu input[type="text"] { min-width:160px; width:95%; margin-bottom:.35rem; }
+    .hidden { display:none !important; }
+    .feed-controls input[type="text"] { min-width: 150px; }
+    .feed-url-placeholder { min-width: 210px; }
+    .soft { opacity:.75; }
   </style>
 </head>
 <body>
@@ -33,110 +44,57 @@
     <img src="/static/logo.png" alt="Audiobook Finder logo" class="logo" />
     <h1>Audiobook Finder</h1>
     <span class="muted">Remote MAM requests to qBittorrent; Audiobookshelf scans qB's folder</span>
+    <button id="showHistoryBtn" title="Show download history">History</button>
+    {% if setup_enabled %}<button type="button" onclick="window.location.href='/setup'">Setup / Configuration</button>{% endif %}
   </header>
 
-  <form id="searchForm" class="row">
-    <input id="q" type="text" placeholder="Search title/author/narrator" />
-    <select id="sort">
-      <option value="default">Sort: Default</option>
-      <option value="seedersDesc">Seeders ↓</option>
-      <option value="dateDesc">Date Added ↓</option>
-      <option value="sizeDesc">Size ↓</option>
-    </select>
-    <select id="window">
-      <option value="all">All time</option>
-      <option value="past_3_months">Past 3 months</option>
-      <option value="past_4_months">Past 4 months</option>
-      <option value="past_12_months">Past 12 months</option>
-    </select>
-    <select id="perpage">
-      <option>25</option>
-      <option>50</option>
-      <option>100</option>
-    </select>
-    <button id="searchBtn" type="submit">Search</button>
-  </form>
-
+  <section class="card">
+    <form id="searchForm" class="row">
+      <input id="q" type="text" placeholder="Search title/author/narrator — blank runs default 3-month M4B search" />
+      <select id="sort" title="MAM backend sort">
+        <option value="snatchedDesc">MAM sort: Snatched ↓</option>
+        <option value="seedersDesc">MAM sort: Seeders ↓</option>
+        <option value="dateDesc">MAM sort: Date Added ↓</option>
+        <option value="sizeDesc">MAM sort: Size ↓</option>
+      </select>
+      <select id="window">
+        <option value="">Auto window</option>
+        <option value="all">All time</option>
+        <option value="past_3_months">Past 3 months</option>
+        <option value="past_4_months">Past 4 months</option>
+        <option value="past_12_months">Past 12 months</option>
+      </select>
+      <select id="perpage"><option>25</option><option>50</option><option>100</option></select>
+      <button id="searchBtn" type="submit">Search</button>
+    </form>
     <div id="status" class="muted" style="margin-top:0.5rem"></div>
+    <table id="results" style="display:none"><thead></thead><tbody></tbody></table>
+  </section>
 
-    <table id="results" style="display:none">
-		<thead>
-		  <tr>
-		    <th>Title</th>
-		    <th>Author</th>
-		    <th>Narrator</th>
-		    <th>Filetype</th>
-		    <th class="right">Size</th>
-		    <th class="right">Seeders</th>
-		    <th>Uploaded</th>
-		    <th class="center">Link</th>
-		    <th>Add</th>
-		  </tr>
-		  <tr class="filters">
-		    <th><input id="filterTitle" type="text" placeholder="Filter title" /></th>
-		    <th><input id="filterAuthor" type="text" placeholder="Filter author" /></th>
-		    <th><input id="filterNarrator" type="text" placeholder="Filter narrator" /></th>
-		    <th><select id="filterFiletype"><option value="">All</option><option value="m4b" selected>M4B</option><option value="mp3">MP3</option><option value="epub">EPUB</option></select></th>
-		    <th></th><th></th><th></th><th></th><th></th>
-		  </tr>
-		</thead>
-      <tbody></tbody>
-    </table>
+  <section id="rssCard" class="card">
+    <h3 style="margin:0 0 .5rem 0; font-size:1.1rem;">MAM RSS Watch Dashboard</h3>
+    <form id="feedForm" class="row">
+      <input id="feedName" type="text" placeholder="Feed name" />
+      <select id="feedKind"><option value="author">Author</option><option value="series">Series</option><option value="narrator">Narrator</option><option value="custom">Custom MAM RSS</option></select>
+      <input id="feedUrl" type="text" placeholder="MAM RSS URL (stored server-side, redacted in UI)" />
+      <input id="feedColor" type="color" value="#eef6ff" title="Feed row color" />
+      <input id="feedLimit" type="number" min="1" max="500" value="15" title="Default results per feed" style="width:5rem" />
+      <button type="submit">Save Feed</button>
+      <button type="button" id="refreshFeedsBtn">Refresh Enabled Feeds</button>
+    </form>
+    <div id="feedStatus" class="muted" style="margin-top:0.5rem"></div>
+    <h4>Feeds</h4>
+    <table id="feeds"><thead><tr><th>Color</th><th>Name</th><th>Kind</th><th>URL</th><th>Enabled</th><th>Combined</th><th>Collapsed</th><th>Limit</th><th>Status</th><th>Actions</th></tr></thead><tbody></tbody></table>
+    <h4>Combined RSS Items <span class="muted">(hidden/grabbed omitted)</span></h4>
+    <table id="rssItems"><thead></thead><tbody></tbody></table>
+  </section>
 
-    <div id="rssCard" class="card" style="margin-top:1rem;">
-      <h3 style="margin:0 0 .5rem 0; font-size:1.1rem;">MAM RSS Watch Dashboard</h3>
-      <form id="feedForm" class="row">
-        <input id="feedName" type="text" placeholder="Feed name (author/series/narrator)" />
-        <select id="feedKind">
-          <option value="author">Author</option>
-          <option value="series">Series</option>
-          <option value="narrator">Narrator</option>
-          <option value="custom">Custom MAM RSS</option>
-        </select>
-        <input id="feedUrl" type="text" placeholder="MAM RSS URL (stored server-side, redacted in UI)" />
-        <button type="submit">Save Feed</button>
-        <button type="button" id="refreshFeedsBtn">Refresh Enabled Feeds</button>
-      </form>
-      <div id="feedStatus" class="muted" style="margin-top:0.5rem"></div>
-      <table id="feeds">
-        <thead><tr><th>Name</th><th>Kind</th><th>URL</th><th>Refresh</th></tr></thead>
-        <tbody></tbody>
-      </table>
-      <table id="rssItems">
-        <thead><tr><th>Title</th><th>Feed</th><th>Link</th><th>Add</th><th>Hide</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-    
-    <div id="historyCard" class="card" style="margin-top:1rem; display:none">
-      <h3 style="margin:0 0 .5rem 0; font-size:1.1rem;">History</h3>
-      <table id="history">
-        <thead>
-		    <tr>
-		      <th>Title</th>
-		      <th>Author</th>
-		      <th>Narrator</th>
-		      <th class="center">Link</th>
-		      <th>When</th>
-		      <th>Status</th>
-		      <th>Remove</th>
-		    </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
+  <section id="historyCard" class="card" style="display:none">
+    <h3 style="margin:0 0 .5rem 0; font-size:1.1rem;">History</h3>
+    <table id="history"><thead><tr><th>Title</th><th>Author</th><th>Narrator</th><th class="center">MAM</th><th class="center">ABS</th><th>When</th><th>Status</th><th>Remove</th></tr></thead><tbody></tbody></table>
+  </section>
 
-    <p class="muted">Health check: <code id="health">…</code></p>
-  </div>
-  <div style="margin-left:auto">
-    <button id="showHistoryBtn" title="Show download history">History</button>
-  </div>
-  {% if setup_enabled %}
-  <div style="margin-left:auto; margin-top:0.5rem">
-    <button type="button" onclick="window.location.href='/setup'">Setup / Configuration</button>
-  </div>
-  {% endif %}
-
+  <p class="muted">Health check: <code id="health">…</code></p>
   <script src="/static/app.js" defer></script>
 </body>
 </html>
