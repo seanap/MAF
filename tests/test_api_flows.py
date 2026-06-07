@@ -164,6 +164,57 @@ def test_legacy_add_delegates_to_safe_numeric_add(monkeypatch, tmp_path):
     assert client.post("/add", json={"dl": "private-token"}).status_code == 422
 
 
+def test_cover_endpoint_serves_disk_cache_without_upstream(tmp_path):
+    mod = load_app(tmp_path)
+    cover_dir = Path(mod.DATA_DIR) / "covers"
+    cover_dir.mkdir(parents=True)
+    (cover_dir / "123.webp").write_bytes(b"RIFFfakewebp")
+    client = TestClient(mod.app)
+
+    response = client.get("/api/mam/cover/123")
+
+    assert response.status_code == 200
+    assert response.content == b"RIFFfakewebp"
+    assert "max-age" in response.headers["cache-control"]
+
+
+def test_cover_endpoint_respects_negative_cache(tmp_path):
+    mod = load_app(tmp_path)
+    cover_dir = Path(mod.DATA_DIR) / "covers"
+    cover_dir.mkdir(parents=True)
+    (cover_dir / "404.missing").touch()
+    client = TestClient(mod.app)
+
+    response = client.get("/api/mam/cover/404")
+
+    assert response.status_code == 404
+
+
+def test_api_search_uses_short_ttl_cache_but_reannotates_history(monkeypatch, tmp_path):
+    mod = load_app(tmp_path)
+    calls = []
+
+    class FakeMam:
+        def __init__(self, base, cookie):
+            pass
+        async def search(self, payload):
+            calls.append(payload["tor"]["text"])
+            return {"total": 1, "data": [{"id": "987", "title": "Cached M4B", "format": "M4B", "isFree": "1"}]}
+
+    monkeypatch.setattr(mod, "MamClient", FakeMam)
+    client = TestClient(mod.app)
+
+    first = client.get("/api/search?q=cache-probe&window=all&sort=dateDesc&perpage=25")
+    mod.history_store.mark_grabbed("mam:torrent:987", torrent_id="987")
+    second = client.get("/api/search?q=cache-probe&window=all&sort=dateDesc&perpage=25")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert calls == ["cache-probe"]
+    assert first.json()["items"][0]["grabbed"] is False
+    assert second.json()["items"][0]["grabbed"] is True
+
+
 def test_frontend_uses_new_api_contracts():
     app_js = Path("app/static/app.js").read_text()
 

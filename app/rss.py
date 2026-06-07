@@ -79,7 +79,18 @@ def extract_torrent_id(value: str | None) -> str | None:
 
 def _text(elem: ET.Element, name: str) -> str:
     found = elem.find(name)
-    return "" if found is None or found.text is None else found.text.strip()
+    if found is None:
+        return ""
+    text = " ".join(part.strip() for part in found.itertext() if part and part.strip())
+    return text.strip()
+
+
+def description_preview(value: str | None, *, limit: int = 360) -> str:
+    text = re.sub(r"<[^>]+>", " ", value or "")
+    text = re.sub(r"\s+", " ", text).strip()
+    if len(text) <= limit:
+        return text
+    return text[:limit].rsplit(" ", 1)[0].rstrip(" .,;:-") + "…"
 
 
 def normalize_rss_datetime(value: str | None) -> str:
@@ -110,6 +121,7 @@ def normalize_rss_items(xml_text: str, *, feed_id: int) -> list[dict[str, Any]]:
         guid = _text(elem, "guid")
         published_at = normalize_rss_datetime(_text(elem, "pubDate") or _text(elem, "dc:date") or _text(elem, "date"))
         description = _text(elem, "description")
+        preview = description_preview(description)
         tid = extract_torrent_id(link) or extract_torrent_id(guid)
         if not tid:
             continue
@@ -120,7 +132,8 @@ def normalize_rss_items(xml_text: str, *, feed_id: int) -> list[dict[str, Any]]:
             "title": title,
             "details_url": f"https://www.myanonamouse.net/t/{tid}",
             "cover_url": f"/api/mam/cover/{tid}",
-            "description": description,
+            "description": preview,
+            "description_preview": preview,
             "site_added_at": published_at,
             "source": "rss",
             "format": "M4B" if "m4b" in title.lower() else "",
@@ -192,6 +205,7 @@ class FeedStore:
             self._ensure_column(cx, "rss_items", "description", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column(cx, "rss_items", "site_added_at", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column(cx, "rss_items", "rss_position", "INTEGER NOT NULL DEFAULT 0")
+            cx.execute("CREATE INDEX IF NOT EXISTS idx_rss_items_feed_site_added ON rss_items(feed_id, site_added_at DESC, rss_position ASC, id DESC)")
 
     def _public_feed(self, row: sqlite3.Row) -> dict[str, Any]:
         d = dict(row)
@@ -333,6 +347,8 @@ class FeedStore:
             row["feed_enabled"] = bool(row.get("feed_enabled"))
             row["feed_show_in_combined"] = bool(row.get("feed_show_in_combined"))
             row["feed_color"] = validate_color(row.get("feed_color"))
+            row["description_preview"] = description_preview(row.get("description") or "")
+            row["description"] = row["description_preview"]
             row_limit = clamp_display_limit(row.get("feed_display_limit")) if apply_display_limit and combined and not feed_id else 500
             grouped_counts[fid] = grouped_counts.get(fid, 0) + 1
             if grouped_counts[fid] > row_limit:

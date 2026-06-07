@@ -116,3 +116,24 @@ def test_normalize_rss_items_captures_pubdate():
 
     assert item["site_added_at"] == "2026-06-06T12:00:00+00:00"
     assert item["cover_url"] == "/api/mam/cover/123"
+
+
+def test_rss_description_preview_is_stripped_and_truncated():
+    long = "<p>" + ("word " * 120) + "</p>"
+    xml = f"<?xml version='1.0'?><rss><channel><item><title>Book M4B</title><link>https://www.myanonamouse.net/t/321</link><description>{long}</description></item></channel></rss>"
+    item = normalize_rss_items(xml, feed_id=1)[0]
+
+    assert item["description_preview"].endswith("…")
+    assert len(item["description_preview"]) <= 361
+    assert "<p>" not in item["description_preview"]
+
+
+def test_feed_store_limit_caps_combined_items(tmp_path: Path):
+    store = FeedStore(tmp_path / "feeds.sqlite3")
+    feed = store.create_feed("One", "series", "https://www.myanonamouse.net/rss.php?passkey=one", display_limit=500)
+    store.upsert_items(feed["id"], [
+        {"canonical_key": f"mam:torrent:{i}", "torrent_id": str(i), "title": f"Book {i}", "details_url": f"https://www.myanonamouse.net/t/{i}", "site_added_at": f"2026-01-{(i%28)+1:02d}T00:00:00+00:00"}
+        for i in range(20)
+    ])
+
+    assert len(store.list_items(combined=True, limit=7)) == 7

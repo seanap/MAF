@@ -1,5 +1,6 @@
-import os, json, re
+import os, json, re, time, asyncio
 from pathlib import Path
+from contextlib import asynccontextmanager
 import httpx
 from app.history_store import HistoryStore
 from app.abs_client import AbsClient, AbsError, choose_abs_match
@@ -10,7 +11,7 @@ from app.qbit import QbitClient, QbitError
 from app.rss import FeedStore, normalize_rss_items, redact_url
 from app.wedge import decide_wedge
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -23,6 +24,15 @@ DATA_DIR = os.getenv("DATA_DIR", "/data")
 CONFIG_PATH = os.getenv("APP_CONFIG_PATH", os.path.join(DATA_DIR, "config.json"))
 DB_PATH = os.getenv("DB_PATH", os.path.join(DATA_DIR, "history.db"))
 BASE_DIR = Path(__file__).resolve().parent
+COVER_CACHE_DIR = Path(DATA_DIR) / "covers"
+COVER_NEGATIVE_TTL_SECONDS = 6 * 60 * 60
+COVER_BROWSER_TTL_SECONDS = 30 * 24 * 60 * 60
+SEARCH_CACHE_TTL_SECONDS = 90
+RSS_DEFAULT_LIMIT = 200
+RSS_MAX_LIMIT = 500
+_search_cache: dict[tuple[Any, ...], tuple[float, dict[str, Any]]] = {}
+_cover_locks: dict[str, asyncio.Lock] = {}
+
 
 def load_json_config() -> dict:
     try:
@@ -215,7 +225,63 @@ class SetupPayload(BaseModel):
     app_prefix: str | None = None
 
 # ---------------------------- App ----------------------------
-app = FastAPI(title="MAM Audiobook Finder", version="0.4.0-maf")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    limits = httpx.Limits(max_connections=20, max_keepalive_connections=10)
+    app.state.mam_http = httpx.AsyncClient(timeout=30.0, limits=limits)
+    app.state.cover_http = httpx.AsyncClient(timeout=20.0, follow_redirects=True, limits=limits)
+    try:
+        yield
+    finally:
+        await app.state.mam_http.aclose()
+        await app.state.cover_http.aclose()
+
+app = FastAPI(title="MAM Audiobook Finder", version="0.4.0-maf", lifespan=lifespan)
+
+
+def _shared_client(name: str) -> httpx.AsyncClient | None:
+    return getattr(app.state, name, None)
+
+
+def _mam_client() -> MamClient:
+    client = _shared_client("mam_http")
+    try:
+        return MamClient(settings.MAM_BASE, settings.MAM_COOKIE, client=client)
+    except TypeError:
+        # Test fakes may not accept the shared-client kwarg. Keep the contract simple.
+        return MamClient(settings.MAM_BASE, settings.MAM_COOKIE)
+
+
+def _search_cache_key(q: str, window: str, page: int, requested_perpage: int, sort: str) -> tuple[Any, ...]:
+    return ((q or "").strip(), window or "", max(0, int(page or 0)), int(requested_perpage), sort or "")
+
+
+def _search_cache_get(key: tuple[Any, ...]) -> dict[str, Any] | None:
+    entry = _search_cache.get(key)
+    if not entry:
+        return None
+    expires_at, value = entry
+    if expires_at <= time.monotonic():
+        _search_cache.pop(key, None)
+        return None
+    return value
+
+
+def _search_cache_set(key: tuple[Any, ...], value: dict[str, Any]) -> None:
+    if len(_search_cache) > 64:
+        now = time.monotonic()
+        for stale_key, (expires_at, _) in list(_search_cache.items()):
+            if expires_at <= now:
+                _search_cache.pop(stale_key, None)
+        while len(_search_cache) > 64:
+            _search_cache.pop(next(iter(_search_cache)))
+    _search_cache[key] = (time.monotonic() + SEARCH_CACHE_TTL_SECONDS, value)
+
+
+def _cover_headers(content_type: str = "image/webp") -> dict[str, str]:
+    return {"Cache-Control": f"public, max-age={COVER_BROWSER_TTL_SECONDS}, immutable", "Content-Type": content_type}
+
 
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -276,19 +342,38 @@ async def api_mam_cover(torrent_id: str):
     cookie = build_mam_cookie(settings.MAM_COOKIE)
     if not cookie:
         raise HTTPException(status_code=404, detail="MAM cookie is not configured")
-    url = f"https://cdn.myanonamouse.net/t/p/small/{tid}.webp"
-    headers = {"Cookie": cookie, "User-Agent": "MAF/0.1", "Accept": "image/webp,image/*,*/*"}
-    try:
-        async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
-            response = await client.get(url, headers=headers)
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail="MAM cover fetch failed") from exc
-    if response.status_code != 200 or not response.content:
+    COVER_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_path = COVER_CACHE_DIR / f"{tid}.webp"
+    missing_path = COVER_CACHE_DIR / f"{tid}.missing"
+    if cache_path.exists() and cache_path.stat().st_size > 0:
+        return FileResponse(cache_path, media_type="image/webp", headers=_cover_headers())
+    if missing_path.exists() and time.time() - missing_path.stat().st_mtime < COVER_NEGATIVE_TTL_SECONDS:
         raise HTTPException(status_code=404, detail="MAM cover not found")
-    content_type = response.headers.get("content-type") or "image/webp"
-    if not content_type.lower().startswith("image/"):
-        raise HTTPException(status_code=404, detail="MAM cover was not an image")
-    return Response(content=response.content, media_type=content_type, headers={"Cache-Control": "public, max-age=86400"})
+    lock = _cover_locks.setdefault(tid, asyncio.Lock())
+    async with lock:
+        if cache_path.exists() and cache_path.stat().st_size > 0:
+            return FileResponse(cache_path, media_type="image/webp", headers=_cover_headers())
+        url = f"https://cdn.myanonamouse.net/t/p/small/{tid}.webp"
+        headers = {"Cookie": cookie, "User-Agent": "MAF/0.1", "Accept": "image/webp,image/*,*/*"}
+        try:
+            client = _shared_client("cover_http")
+            if client is None:
+                async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as fallback:
+                    response = await fallback.get(url, headers=headers)
+            else:
+                response = await client.get(url, headers=headers)
+        except httpx.HTTPError as exc:
+            raise HTTPException(status_code=502, detail="MAM cover fetch failed") from exc
+        content_type = (response.headers.get("content-type") or "image/webp").split(";", 1)[0].lower()
+        if response.status_code != 200 or not response.content or not content_type.startswith("image/"):
+            missing_path.touch()
+            raise HTTPException(status_code=404, detail="MAM cover not found")
+        tmp_path = cache_path.with_suffix(".webp.tmp")
+        tmp_path.write_bytes(response.content)
+        tmp_path.replace(cache_path)
+        if missing_path.exists():
+            missing_path.unlink(missing_ok=True)
+    return FileResponse(cache_path, media_type=content_type or "image/webp", headers=_cover_headers(content_type or "image/webp"))
 
 @app.get("/api/search")
 async def api_search(q: str = "", window: str = "", page: int = 0, perpage: int = 25, sort: str = "snatchedDesc"):
@@ -300,17 +385,22 @@ async def api_search(q: str = "", window: str = "", page: int = 0, perpage: int 
         payload, meta = build_search_payload_for_query(q=q, window=window, page=page, perpage=max(requested_perpage, 100), sort=sort)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    try:
-        raw = await MamClient(settings.MAM_BASE, settings.MAM_COOKIE).search(payload)
-        items = [normalize_mam_result(item) for item in raw.get("data", [])]
-        items = [item for item in items if item.get("format_confident")]
-    except InvalidTorrentId:
-        items = []
-    except MamError as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
-    annotated = history_store.annotate_items(items)
+    cache_key = _search_cache_key(q, window, page, requested_perpage, sort)
+    cached = _search_cache_get(cache_key)
+    if cached is None:
+        try:
+            raw = await _mam_client().search(payload)
+            items = [normalize_mam_result(item) for item in raw.get("data", [])]
+            items = [item for item in items if item.get("format_confident")]
+        except InvalidTorrentId:
+            items = []
+        except MamError as exc:
+            raise HTTPException(status_code=502, detail=str(exc))
+        cached = {"items": items, "page": max(0, page), "perpage": requested_perpage, "total_raw": raw.get("total") if 'raw' in locals() else len(items), **meta}
+        _search_cache_set(cache_key, cached)
+    annotated = history_store.annotate_items(list(cached["items"]))
     shown_items = annotated[:requested_perpage]
-    return {"items": shown_items, "page": max(0, page), "perpage": requested_perpage, "total": len(annotated), "shown": len(shown_items), **meta}
+    return {"items": shown_items, "page": cached["page"], "perpage": requested_perpage, "total": len(annotated), "shown": len(shown_items), **{k: v for k, v in cached.items() if k not in {"items", "page", "perpage", "total_raw"}}}
 
 @app.post("/api/torrents/add")
 async def api_add_torrent(body: TorrentAddRequest):
@@ -322,7 +412,7 @@ async def api_add_torrent(body: TorrentAddRequest):
     metadata = {"is_freeleech": body.is_freeleech} if body.is_freeleech is not None else {}
     decision = decide_wedge(metadata, mode=settings.WEDGE_MODE, unknown_fallback=settings.WEDGE_UNKNOWN_FALLBACK, override=body.use_wedge)
     try:
-        torrent_bytes = await MamClient(settings.MAM_BASE, settings.MAM_COOKIE).fetch_torrent_bytes(tid, use_wedge=decision.use_wedge)
+        torrent_bytes = await _mam_client().fetch_torrent_bytes(tid, use_wedge=decision.use_wedge)
         state = await QbitClient(settings.QB_URL, settings.QB_USER, settings.QB_PASS).add_torrent_bytes(
             torrent_id=tid,
             torrent_bytes=torrent_bytes,
@@ -413,23 +503,16 @@ def api_delete_feed(feed_id: int):
 
 @app.get("/api/rss/items")
 def api_rss_items(feed_id: int | None = None, combined: bool = True, include_hidden: bool = False, include_grabbed: bool = False, limit: int | None = None):
-    items = history_store.annotate_items(feed_store.list_items(feed_id, combined=combined, limit=None, apply_display_limit=False))
+    try:
+        requested_limit = min(RSS_MAX_LIMIT, max(1, int(limit or RSS_DEFAULT_LIMIT)))
+    except (TypeError, ValueError):
+        requested_limit = RSS_DEFAULT_LIMIT
+    items = history_store.annotate_items(feed_store.list_items(feed_id, combined=combined, limit=requested_limit, apply_display_limit=True))
     if not include_hidden:
         items = [item for item in items if not item.get("hidden")]
     if not include_grabbed:
         items = [item for item in items if not item.get("grabbed")]
-    if combined and not feed_id:
-        counts = {}
-        visible = []
-        for item in items:
-            fid = int(item.get("feed_id") or 0)
-            counts[fid] = counts.get(fid, 0) + 1
-            if counts[fid] <= int(item.get("feed_display_limit") or 15):
-                visible.append(item)
-        items = visible
-    if limit is not None:
-        items = items[:max(1, min(500, int(limit)))]
-    return {"items": items}
+    return {"items": items[:requested_limit], "limit": requested_limit}
 
 def _safe_refresh_message(exc: Exception) -> str:
     msg = str(exc) or exc.__class__.__name__

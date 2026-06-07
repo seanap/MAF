@@ -51,7 +51,7 @@ def build_mam_cookie(raw: str) -> str:
 
 
 class MamClient:
-    def __init__(self, base_url: str, cookie: str, *, timeout: float = 30.0) -> None:
+    def __init__(self, base_url: str, cookie: str, *, timeout: float = 30.0, client: httpx.AsyncClient | None = None) -> None:
         parsed = urlparse((base_url or "https://www.myanonamouse.net").rstrip("/"))
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             raise MamError("Invalid MAM base URL")
@@ -59,6 +59,7 @@ class MamClient:
         self.host = parsed.netloc
         self.cookie = build_mam_cookie(cookie)
         self.timeout = timeout
+        self.client = client
 
     def build_download_url(self, torrent_id: str | int, *, use_wedge: bool = False) -> str:
         tid = validate_torrent_id(torrent_id)
@@ -79,11 +80,14 @@ class MamClient:
         if not self.cookie:
             raise MamError("MAM cookie is not configured")
         url = self.build_download_url(torrent_id, use_wedge=use_wedge)
-        async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=False) as client:
-            try:
-                response = await client.get(url, headers=self.headers())
-            except httpx.HTTPError as exc:
-                raise MamError("MAM torrent fetch failed") from exc
+        try:
+            if self.client is not None:
+                response = await self.client.get(url, headers=self.headers(), follow_redirects=False)
+            else:
+                async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=False) as client:
+                    response = await client.get(url, headers=self.headers())
+        except httpx.HTTPError as exc:
+            raise MamError("MAM torrent fetch failed") from exc
         if response.is_redirect:
             loc = response.headers.get("location", "")
             if urlparse(loc).netloc and urlparse(loc).netloc != self.host:
@@ -104,11 +108,14 @@ class MamClient:
             "Origin": self.base_url,
             "Referer": f"{self.base_url}/",
         }
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            try:
-                response = await client.post(f"{self.base_url}/tor/js/loadSearchJSONbasic.php", headers=headers, params={"dlLink": "1"}, json=payload)
-            except httpx.HTTPError as exc:
-                raise MamError("MAM search failed") from exc
+        try:
+            if self.client is not None:
+                response = await self.client.post(f"{self.base_url}/tor/js/loadSearchJSONbasic.php", headers=headers, params={"dlLink": "1"}, json=payload)
+            else:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    response = await client.post(f"{self.base_url}/tor/js/loadSearchJSONbasic.php", headers=headers, params={"dlLink": "1"}, json=payload)
+        except httpx.HTTPError as exc:
+            raise MamError("MAM search failed") from exc
         if response.status_code != 200:
             raise MamError(f"MAM search returned HTTP {response.status_code}")
         try:
@@ -141,6 +148,14 @@ def _flatten(value: Any) -> str:
     return str(value)
 
 
+def description_preview(value: Any, *, limit: int = 360) -> str:
+    text = re.sub(r"<[^>]+>", " ", _flatten(value))
+    text = re.sub(r"\s+", " ", text).strip()
+    if len(text) <= limit:
+        return text
+    return text[:limit].rsplit(" ", 1)[0].rstrip(" .,;:-") + "…"
+
+
 def normalize_mam_result(item: dict[str, Any]) -> dict[str, Any]:
     tid = validate_torrent_id(item.get("id") or item.get("tid"))
     title = item.get("title") or item.get("name") or ""
@@ -162,7 +177,7 @@ def normalize_mam_result(item: dict[str, Any]) -> dict[str, Any]:
         "seeders": item.get("seeders"),
         "leechers": item.get("leechers"),
         "uploaded_at": item.get("added"),
-        "description": _flatten(item.get("description") or item.get("descr") or item.get("synopsis") or ""),
+        "description_preview": description_preview(item.get("description") or item.get("descr") or item.get("synopsis") or ""),
         "cover_url": f"/api/mam/cover/{tid}",
         "details_url": f"https://www.myanonamouse.net/t/{tid}",
         "is_freeleech": is_freeleech,

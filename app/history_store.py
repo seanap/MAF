@@ -52,6 +52,7 @@ class HistoryStore:
             }.items():
                 if column not in cols:
                     cx.execute(f"ALTER TABLE item_state ADD COLUMN {column} {ddl}")
+            cx.execute("CREATE INDEX IF NOT EXISTS idx_item_state_updated ON item_state(updated_at DESC)")
 
     def _row(self, key: str) -> dict[str, Any] | None:
         with self.connect() as cx:
