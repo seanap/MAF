@@ -1,12 +1,12 @@
-# MAF Docker / Dockge Deployment
+# MAF Docker and MAM Guide
 
-## Production shape
+## Dockge Deployment
 
 MAF should run as a small Docker service with only `/data` persisted. In the default workflow it does not need the Audiobookshelf library or qBittorrent download directory mounted because qBittorrent downloads to its configured default folder and Audiobookshelf scans that same folder.
 
 Expose MAF only to a trusted LAN/Tailscale network unless you add authentication in front of it.
 
-## Dockge compose
+### Dockge compose
 
 ```yaml
 services:
@@ -28,7 +28,7 @@ services:
       start_period: 20s
 ```
 
-## `.env`
+### `.env`
 
 ```env
 TZ=America/New_York
@@ -55,7 +55,7 @@ ABS_TOKEN=
 ABS_LIBRARY_ID=
 ```
 
-## Verification before production use
+### Verification before production use
 
 ```bash
 docker compose config
@@ -66,10 +66,12 @@ curl -fsS http://127.0.0.1:8008/health
 
 Then open the UI from a trusted LAN/Tailscale client, add one known-safe MAM item, verify it appears in qBittorrent, and verify Audiobookshelf sees it after its scan.
 
-## Security warning
+## MAM Cookie ID
 
-MAF is a control-plane service. It stores a MAM cookie and private RSS URLs, and it can add torrents to qBittorrent.
-
-- Do not commit `.env`, `/data`, SQLite DBs, or logs that may contain private values.
-- Browser/API feed responses are redacted; `/data/history.db` still contains private RSS URLs by design.
-- Do not publish the raw app to the public Internet.
+* Log in to MAM
+* Go to Username > Prefrences > Security
+* Fill out your public facing IP > click 'Submit changes'
+* Copy your Cookie info:  
+  * "PJbv...ncimf"
+  * We need to add the 'mam_id=' infront of the key and paste that whole thing in the env. Example:
+  * MAM_COOKIE=mam_id=PJbv...ncimf
