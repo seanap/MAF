@@ -11,6 +11,9 @@ MAF → fetch torrent from MAM server-side → qBittorrent → Audiobookshelf sc
 
 qBittorrent downloads to its own configured default folder. Audiobookshelf scans that same folder and handles matching/metadata. MAF does **not** need to mount, move, rename, hardlink, transcode, or organize your audiobook files.
 
+<img width="3497" height="1999" alt="Screenshot 2026-06-07 102233(1)" src="https://github.com/user-attachments/assets/cf701285-f317-4b47-a9fd-f0e6553b0f5e" />
+<img width="3493" height="1701" alt="Screenshot 2026-06-07 102343" src="https://github.com/user-attachments/assets/42a98a85-b809-4855-a83e-339251b2ba2b" />
+
 ## Features
 
 - MAM catalog search focused on audiobook/M4B results.
