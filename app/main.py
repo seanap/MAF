@@ -118,14 +118,14 @@ class Settings:
             raw_cookie = os.getenv("MAM_COOKIE", "")
         self.MAM_COOKIE = build_mam_cookie(raw_cookie)
 
-        self.QB_URL = (cfg.get("QB_URL") or os.getenv("QB_URL", "http://qbittorrent:8080")).rstrip("/")
-        self.QB_USER = cfg.get("QB_USER") or os.getenv("QB_USER", "admin")
-        self.QB_PASS = cfg.get("QB_PASS") or os.getenv("QB_PASS", "adminadmin")
+        self.QB_URL = (cfg.get("QB_URL") or os.getenv("QB_URL", "")).rstrip("/")
+        self.QB_USER = cfg.get("QB_USER") or os.getenv("QB_USER", "")
+        self.QB_PASS = cfg.get("QB_PASS") or os.getenv("QB_PASS", "")
         self.QB_SAVEPATH = cfg.get("QB_SAVEPATH") or os.getenv("QB_SAVEPATH", "")
         self.QB_TAGS = cfg.get("QB_TAGS") or os.getenv("QB_TAGS", "MAM,audiobook")
         self.WEDGE_MODE = cfg.get("WEDGE_MODE") or os.getenv("WEDGE_MODE", "smart")
         self.WEDGE_UNKNOWN_FALLBACK = env_bool("WEDGE_UNKNOWN_FALLBACK", True)
-        self.ABS_URL = (cfg.get("ABS_URL") or os.getenv("ABS_URL", "http://192.168.1.9:13378")).rstrip("/")
+        self.ABS_URL = (cfg.get("ABS_URL") or os.getenv("ABS_URL", "")).rstrip("/")
         self.ABS_TOKEN = cfg.get("ABS_TOKEN") or os.getenv("ABS_TOKEN", "")
         self.ABS_LIBRARY_ID = cfg.get("ABS_LIBRARY_ID") or os.getenv("ABS_LIBRARY_ID", "")
         self.ABS_DIRECT_ITEM_URLS = env_bool("ABS_DIRECT_ITEM_URLS", False)
@@ -197,9 +197,9 @@ with engine.begin() as cx:
         pass
 
 def needs_setup() -> bool:
-    # Consider setup incomplete if we don't have a MAM cookie,
+    # Consider setup incomplete if we don't have a MAM cookie, qBit URL,
     # a library directory, or any qB path mapping.
-    return not settings.MAM_COOKIE or not settings.LIB_DIR or not settings.QB_PATH_MAP
+    return not settings.MAM_COOKIE or not settings.QB_URL or not settings.LIB_DIR or not settings.QB_PATH_MAP
 
 def setup_context(request: Request) -> dict:
     qb_prefix = settings.QB_INNER_DL_PREFIX

@@ -1,20 +1,21 @@
-# Python
-__pycache__/
-*.pyc
-
-# Environment & local data
+.git
+.gitignore
+.dockerignore
 .env
 .env.*
 !.env.example
-/data/
+data/
 *.db
 *.sqlite
 *.sqlite3
-
-# Build/test/editor noise
+__pycache__/
+*.py[cod]
 .pytest_cache/
 .coverage
 htmlcov/
 .venv/
 venv/
+node_modules/
 .DS_Store
+spec.md
+DEV_NOTES.md

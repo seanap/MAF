@@ -1,6 +1,6 @@
 # MAF Development Guide
 
-MAF is Sean's private fork of `mam-audiofinder`, focused on one job: request MAM audiobooks remotely and send torrent bytes to local qBittorrent. qBit downloads to its configured default folder; Audiobookshelf scans that folder. MAF does not organize files.
+MAF is a self-hosted MAM-only audiobook request frontend. It searches or monitors MAM audiobook candidates, then sends selected torrent bytes to qBittorrent. qBittorrent downloads to its configured default folder; Audiobookshelf can scan that same folder. MAF does not organize files.
 
 ## Architecture
 
@@ -11,9 +11,7 @@ MAF is Sean's private fork of `mam-audiofinder`, focused on one job: request MAM
 - `app/wedge.py` — Freeleech Wedge policy.
 - `app/presets.py` — advanced M4B search preset.
 - `app/rss.py` — MAM RSS feed storage/parsing.
-- `docs/specs/MAF_SPEC.md` — full product/environment specification.
-- `docs/specs/NEXT_STEPS_DEVELOPMENT_SPECS.md` — implementation specs for current feature batch.
-- `docs/specs/ADVERSARIAL_REVIEW_NEXT_STEPS.md` — adversarial review findings incorporated into implementation.
+- `app/templates/` and `app/static/` — browser UI.
 
 ## Local test commands
 
@@ -28,14 +26,15 @@ docker compose config >/tmp/maf-compose-config.txt
 
 - Write tests first for behavior changes.
 - Do not add Calibre behavior.
-- Do not move/copy/hardlink/rename audiobook files.
+- Do not move/copy/hardlink/rename audiobook files in the default workflow.
 - Do not send qBit private MAM URLs; fetch torrent bytes server-side and upload those bytes.
 - Keep qBit save path blank unless deliberately overriding qBit defaults.
 - Treat MAM cookies, qBit credentials, ABS tokens, and RSS URLs as secrets.
 - Keep unit tests offline; fake MAM/qBit/ABS.
 
-## Current API surface
+## API surface
 
+- `GET /health`
 - `GET /api/presets`
 - `GET /api/status`
 - `GET /api/search`
@@ -46,6 +45,8 @@ docker compose config >/tmp/maf-compose-config.txt
 - `POST /api/history/mark-grabbed`
 - `GET /api/feeds`
 - `POST /api/feeds`
+- `PATCH /api/feeds/{feed_id}`
+- `DELETE /api/feeds/{feed_id}`
 - `POST /api/feeds/{feed_id}/refresh`
 - `GET /api/rss/items`
 

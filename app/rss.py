@@ -209,9 +209,11 @@ class FeedStore:
 
     def _public_feed(self, row: sqlite3.Row) -> dict[str, Any]:
         d = dict(row)
-        # Local/private UI: expose the RSS URL for convenience. Keep url_redacted
-        # as a compatibility alias for older frontend/tests.
-        public_url = d.get("url_secret", d.get("url_redacted", ""))
+        # Public/browser API responses must never expose private RSS URLs or
+        # passkeys. Recompute from the stored secret each time so old rows with
+        # stale url_redacted values cannot leak.
+        secret_url = d.get("url_secret", "")
+        public_url = redact_url(secret_url or d.get("url_redacted", ""))
         d["url"] = public_url
         d["url_redacted"] = public_url
         d.pop("url_secret", None)

@@ -9,29 +9,9 @@ async function jsonFetch(url, options={}) { const r=await fetch(url, options); c
 function closeFilterMenus(except=null) { document.querySelectorAll('.filter-menu').forEach(x=>{ if(x!==except) x.remove(); }); }
 document.addEventListener('click', e=>{
   if(!e.target.closest('.filter-menu') && !e.target.closest('.filter-btn')) closeFilterMenus();
-  if(!e.target.closest('.desc-popover') && !e.target.closest('.cover-preview-popover') && !e.target.closest('.cover-wrap') && !e.target.closest('tr[data-has-description="1"]')) closeAllPreviews(); // click-away
+  if(!e.target.closest('.cover-preview-popover') && !e.target.closest('.cover-wrap')) closeCoverPreview();
 });
-document.addEventListener('keydown', e=>{ if(e.key==='Escape') { closeFilterMenus(); closeAllPreviews(); } });
-
-// ---------- Shared description popover ----------
-let descPopover;
-function ensureDescriptionPopover(){
-  if(descPopover) return descPopover;
-  descPopover=document.createElement('div'); descPopover.id='descriptionPopover'; descPopover.className='desc-popover hidden'; descPopover.setAttribute('role','dialog'); descPopover.setAttribute('aria-modal','false');
-  descPopover.innerHTML='<button type="button" class="desc-close" aria-label="Close description">×</button><div class="desc-title"></div><div class="desc-body"></div>';
-  descPopover.querySelector('.desc-close').addEventListener('click', closeDescriptionPopover);
-  document.body.appendChild(descPopover); return descPopover;
-}
-function closeDescriptionPopover(){ if(descPopover) descPopover.classList.add('hidden'); document.querySelectorAll('[data-preview-expanded="description"]').forEach(b=>b.removeAttribute('data-preview-expanded')); document.querySelectorAll('.desc-btn[aria-expanded="true"]').forEach(b=>b.setAttribute('aria-expanded','false')); }
-function itemDescription(it){ return String(it.description_preview || it.description || it.desc || it.summary || '').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim(); }
-function showDescriptionPopover(anchor,it){
-  const desc=itemDescription(it) || 'MAM did not include a torrent description in this row. Add a full MAM session-backed description source later if you want live detail-page extraction.';
-  const pop=ensureDescriptionPopover(); pop.querySelector('.desc-title').textContent=it.title||'Description'; pop.querySelector('.desc-body').textContent=desc; pop.classList.remove('hidden');
-  document.querySelectorAll('.desc-btn[aria-expanded="true"]').forEach(b=>b.setAttribute('aria-expanded','false')); if(anchor.setAttribute){ anchor.setAttribute('data-preview-expanded','description'); if(anchor.classList?.contains('desc-btn')) anchor.setAttribute('aria-expanded','true'); }
-  const rect=anchor.getBoundingClientRect(); const narrow=matchMedia('(max-width: 680px)').matches;
-  if(narrow){ pop.style.left='10px'; pop.style.right='10px'; pop.style.top='auto'; pop.style.bottom='12px'; }
-  else { pop.style.right='auto'; pop.style.bottom='auto'; pop.style.left=`${Math.min(window.innerWidth-380, Math.max(8, rect.right+8))}px`; pop.style.top=`${Math.min(window.innerHeight-260, Math.max(8, rect.top))}px`; }
-}
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') { closeFilterMenus(); closeCoverPreview(); } });
 
 // ---------- Shared cover preview ----------
 let coverPopover;
@@ -43,7 +23,6 @@ function ensureCoverPopover(){
   document.body.appendChild(coverPopover); return coverPopover;
 }
 function closeCoverPreview(){ if(coverPopover) coverPopover.classList.add('hidden'); document.querySelectorAll('[data-preview-expanded="cover"]').forEach(b=>b.removeAttribute('data-preview-expanded')); }
-function closeAllPreviews(){ closeDescriptionPopover(); closeCoverPreview(); }
 function showCoverPreview(anchor,it){
   const source=anchor?.currentSrc || anchor?.src || anchor?.dataset?.src; if(!source) return;
   const pop=ensureCoverPopover(); const img=pop.querySelector('.cover-preview-img'); img.src=source; img.alt=`Expanded cover for ${it.title||'book'}`; pop.querySelector('.cover-preview-title').textContent=it.title||'Cover'; pop.classList.remove('hidden');
@@ -99,7 +78,7 @@ class DataTable {
   sorted(rows) { if(!this.sort) return rows; const col=this.columns.find(c=>c.key===this.sort.key); if(!col) return rows; const dir=this.sort.dir==='desc'?-1:1; return [...rows].sort((a,b)=>{ let av=col.value(a), bv=col.value(b); if(col.type==='number'){av=Number(av)||0; bv=Number(bv)||0; return (av-bv)*dir;} if(col.type==='date'){return (parseDate(av)-parseDate(bv))*dir;} return String(av??'').localeCompare(String(bv??''), undefined, {numeric:true,sensitivity:'base'})*dir; }); }
   render() {
     const rows=this.sorted(this.rows.filter(r=>this.passes(r))); const frag=document.createDocumentFragment();
-    rows.forEach(row=>{ const tr=document.createElement('tr'); if(this.opts.rowStyle) tr.setAttribute('style', this.opts.rowStyle(row)||''); if(this.opts.enableRowDescription && (itemDescription(row) || row.torrent_id || row.id)){ tr.dataset.hasDescription='1'; tr.title='Hover or click for MAM description'; tr.addEventListener('mouseenter',()=>showDescriptionPopover(tr,row)); tr.addEventListener('click',e=>{ if(e.target.closest('a,button,input,select,textarea,.filter-menu,.cover-wrap')) return; e.stopPropagation(); showDescriptionPopover(tr,row); }); } this.columns.forEach(col=>{ const td=document.createElement('td'); td.className=col.className||''; if(col.mobileLabel) td.setAttribute('data-label', col.label); const rendered=col.render ? col.render(row) : escapeHtml(col.value(row)); if(rendered instanceof Node) td.appendChild(rendered); else td.innerHTML=rendered; tr.appendChild(td); }); frag.appendChild(tr); });
+    rows.forEach(row=>{ const tr=document.createElement('tr'); if(this.opts.rowStyle) tr.setAttribute('style', this.opts.rowStyle(row)||''); this.columns.forEach(col=>{ const td=document.createElement('td'); td.className=col.className||''; if(col.mobileLabel) td.setAttribute('data-label', col.label); const rendered=col.render ? col.render(row) : escapeHtml(col.value(row)); if(rendered instanceof Node) td.appendChild(rendered); else td.innerHTML=rendered; tr.appendChild(td); }); frag.appendChild(tr); });
     if(!rows.length && this.hasLoaded){ const tr=document.createElement('tr'); const td=document.createElement('td'); td.colSpan=this.columns.length; td.className='center muted empty-row'; td.textContent=this.rows.length ? 'No rows match the active filters. Adjust a column filter above.' : (this.opts.emptyMessage || 'No rows.'); tr.appendChild(td); frag.appendChild(tr); }
     this.tbody.replaceChildren(frag); this.table.style.display = this.hasLoaded ? '' : 'none';
     [...this.thead.querySelectorAll('th')].forEach((th,i)=>{ const mark=th.querySelector('.sort-mark'); if(mark){ const col=this.columns[i]; mark.textContent=(this.sort&&this.sort.key===col.key) ? (this.sort.dir==='asc'?'▲':'▼') : ''; }});
@@ -113,13 +92,13 @@ let searchTable, rssTable, feedSettingsLoaded=false;
 if(q) q.focus();
 (async()=>{ try { const j=await jsonFetch('/health'); $('health').textContent=j.ok?'OK':'Not OK'; } catch { $('health').textContent='Error'; } })();
 function mamLink(id){ return id ? `https://www.myanonamouse.net/t/${encodeURIComponent(id)}` : ''; }
-function actionButton(text, fn, disabled=false){ const b=document.createElement('button'); b.type='button'; b.textContent=text; b.disabled=disabled; b.addEventListener('click', fn); return b; }
+function actionButton(text, fn, disabled=false, title=''){ const b=document.createElement('button'); b.type='button'; b.textContent=text; if(title){ b.title=title; b.setAttribute('aria-label', title); } b.disabled=disabled; b.addEventListener('click', fn); return b; }
 function coverCell(it){
   const box=document.createElement('div'); box.className='cover-wrap'; const id=it.torrent_id||it.id; const cover=it.cover_url || (id ? `/api/mam/cover/${encodeURIComponent(String(id))}` : '');
   const img=document.createElement('img'); img.className='book-cover-thumb'; img.loading='lazy'; img.decoding='async'; img.fetchPriority='low'; img.alt=`Cover for ${it.title||'book'}`;
   if(cover){ img.dataset.src=cover; observeCover(img); img.addEventListener('mouseenter',()=>showCoverPreview(img,it)); img.addEventListener('click',e=>{ e.stopPropagation(); showCoverPreview(img,it); }); } else { box.classList.add('is-missing-cover'); }
   img.onerror=()=>{ box.classList.add('is-missing-cover'); img.removeAttribute('src'); img.removeAttribute('data-src'); img.alt='No cover'; closeCoverPreview(); };
-  box.appendChild(img); const desc=itemDescription(it); if(desc){ const btn=document.createElement('button'); btn.type='button'; btn.className='desc-btn'; btn.textContent='i'; btn.setAttribute('aria-expanded','false'); btn.setAttribute('aria-label',`Show description for ${it.title||'book'}`); btn.addEventListener('click', e=>{ e.stopPropagation(); showDescriptionPopover(btn,it); }); box.appendChild(btn); }
+  box.appendChild(img);
   return box;
 }
 
@@ -135,8 +114,8 @@ function initSearchTable(){
     {key:'seeders', label:'Seeders', type:'number', sortable:true, className:'right hide-mobile', value:r=>r.seeders||0, render:r=>`${r.seeders ?? '-'} / ${r.leechers ?? '-'}`},
     {key:'uploaded', label:'Uploaded', type:'date', sortable:true, className:'hide-mobile', value:r=>r.uploaded_at||r.added||''},
     {key:'mam', label:'MAM', className:'center', value:r=>r.torrent_id||r.id||'', render:r=>{ const url=mamLink(r.torrent_id||r.id); return url ? `<a href="${url}" target="_blank" rel="noopener noreferrer">MAM</a>` : ''; }},
-    {key:'add', label:'Add', value:r=>'', render:r=>actionButton('Add', async e=>addTorrentFromItem(e.currentTarget,r), !(r.torrent_id||r.id))},
-  ], {enableRowDescription:true,onRender:(shown,total)=> statusEl.textContent=`${shown} of ${total} result(s) shown`});
+    {key:'add', label:'DL', value:r=>'', render:r=>actionButton('⬇', async e=>addTorrentFromItem(e.currentTarget,r), !(r.torrent_id||r.id), `Download ${r.title||'torrent'}`)},
+  ], {onRender:(shown,total)=> statusEl.textContent=`${shown} of ${total} result(s) shown`});
 }
 async function runSearch(){
   const text=(q?.value||'').trim(); const sortType=sortSel?.value||'snatchedDesc'; const windowValue=windowSel?.value||''; const perpage=parseInt(perpageSel?.value||'25',10);
@@ -146,7 +125,7 @@ async function runSearch(){
   catch(e){ console.error(e); statusEl.textContent=`Search failed: ${e.message||'unknown error'}`; }
 }
 if(form) form.addEventListener('submit', e=>{ e.preventDefault(); runSearch(); });
-async function addTorrentFromItem(btn,it){ btn.disabled=true; btn.textContent='Adding…'; try { const j=await jsonFetch('/api/torrents/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({torrent_id:String(it.torrent_id||it.id||''),title:it.title||'',author:it.author||it.author_info||'',narrator:it.narrator||it.narrator_info||'',is_freeleech:it.is_freeleech})}); btn.textContent=j.state==='duplicate'?'Duplicate':'Added'; statusEl.textContent=`Sent torrent ${j.torrent_id} to qBittorrent (${j.state}).`; if($('historyCard')?.style.display !== 'none') await loadHistory(); } catch(e){ console.error(e); btn.textContent='Error'; btn.title=e.message||'Add failed'; statusEl.textContent=`Add failed: ${e.message||'unknown error'}`; btn.disabled=false; } }
+async function addTorrentFromItem(btn,it){ btn.disabled=true; const idleText=btn.textContent||'⬇'; btn.textContent='…'; try { const j=await jsonFetch('/api/torrents/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({torrent_id:String(it.torrent_id||it.id||''),title:it.title||'',author:it.author||it.author_info||'',narrator:it.narrator||it.narrator_info||'',is_freeleech:it.is_freeleech})}); btn.textContent=j.state==='duplicate'?'↻':'✓'; statusEl.textContent=`Sent torrent ${j.torrent_id} to qBittorrent (${j.state}).`; if($('historyCard')?.style.display !== 'none') await loadHistory(); } catch(e){ console.error(e); btn.textContent='!'; btn.title=e.message||'Add failed'; statusEl.textContent=`Add failed: ${e.message||'unknown error'}`; btn.disabled=false; setTimeout(()=>{ if(!btn.disabled) btn.textContent=idleText; }, 1800); } }
 
 // ---------- History ----------
 if($('showHistoryBtn')) $('showHistoryBtn').addEventListener('click', async()=>{ $('historyCard').style.display=''; await loadHistory(); $('historyCard').scrollIntoView({behavior:'smooth',block:'start'}); });
@@ -160,9 +139,9 @@ function initRssTable(){ rssTable = new DataTable($('rssItems'), [
   {key:'title', label:'Title', sortable:true, filter:true, mobileLabel:true, value:r=>r.title||''},
   {key:'added', label:'Added', type:'date', sortable:true, className:'hide-mobile', value:r=>r.site_added_at||r.first_seen_at||r.last_seen_at||''},
   {key:'mam', label:'MAM', className:'center', value:r=>r.torrent_id||'', render:r=>r.details_url?`<a href="${escapeHtml(r.details_url)}" target="_blank" rel="noopener noreferrer">MAM</a>`:''},
-  {key:'add', label:'Add', value:r=>'', render:r=>actionButton('Add', async e=>{ await addTorrentFromItem(e.currentTarget,r); await loadRssItems(); }, !r.torrent_id)},
+  {key:'add', label:'DL', value:r=>'', render:r=>actionButton('⬇', async e=>{ await addTorrentFromItem(e.currentTarget,r); await loadRssItems(); }, !r.torrent_id, `Download ${r.title||'torrent'}`)},
   {key:'hide', label:'Hide', value:r=>'', render:r=>actionButton('Hide', async()=>{ await jsonFetch('/api/history/hide',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({canonical_key:r.canonical_key})}); await loadRssItems(); })},
-], {enableRowDescription:true,rowStyle:r=>`background:${lighten(r.feed_color)}`}); rssTable.sort={key:'added', dir:'desc'}; }
+], {rowStyle:r=>`background:${lighten(r.feed_color)}`}); rssTable.sort={key:'added', dir:'desc'}; }
 async function loadRssItems(){ try { const j=await jsonFetch('/api/rss/items?combined=true&include_hidden=false&include_grabbed=false&limit=200'); rssTable.setRows(j.items||[]); } catch(e){ console.error('rss items failed',e); } }
 async function loadFeedSettings(){
   if(!$('feeds')) return; feedSettingsLoaded=true;

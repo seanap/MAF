@@ -1,46 +1,78 @@
 # MAF — MAM Audiobook Finder
 
-Private fork for Sean's MAM-only audiobook request workflow.
+MAF is a small self-hosted web frontend for a MAM-only audiobook request workflow.
+It searches MyAnonamouse, monitors configured MAM RSS feeds, applies a smart Freeleech Wedge policy, and sends server-fetched `.torrent` bytes to qBittorrent.
 
-MAF searches MyAnonamouse, monitors configured MAM RSS feeds, applies smart Freeleech Wedge policy, and sends server-fetched `.torrent` bytes to qBittorrent. qBittorrent downloads to its own configured default folder; Audiobookshelf scans that same backing folder and handles matching/metadata.
+The intended production flow is deliberately boring:
 
-## What MAF is
+```text
+MAF → fetch torrent from MAM server-side → qBittorrent → Audiobookshelf scan/match
+```
 
-- Remote MAM search/request console for Tailscale/LAN use.
-- MAM advanced M4B search preset.
-- MAM RSS watch dashboard for authors, series, narrators, and custom MAM feeds.
-- qBittorrent Web API sender.
-- Local grabbed/hidden history so already requested items can be suppressed.
-- Smart Freeleech Wedge policy.
+qBittorrent downloads to its own configured default folder. Audiobookshelf scans that same folder and handles matching/metadata. MAF does **not** need to mount, move, rename, hardlink, transcode, or organize your audiobook files.
 
-## What MAF is not
+## Features
 
-- Not Calibre integration.
-- Not an Audiobookshelf importer.
-- Not a file organizer.
-- Not a mover/copier/hardlinker/renamer/transcoder.
-- Not a public Internet service.
+- MAM catalog search focused on audiobook/M4B results.
+- Remote request UI designed for LAN/Tailscale use.
+- MAM RSS watch dashboard for authors, series, narrators, or custom MAM feeds.
+- Server-side torrent fetch and qBittorrent Web API upload.
+- Local grabbed/hidden history to suppress already-requested items.
+- Smart Freeleech Wedge decision policy.
+- Cover thumbnails with enlarged hover/click preview.
+- Docker/Dockge-friendly deployment: one `/data` volume plus environment variables.
 
-## Project documentation
+## Non-goals
 
-- [Full MAF spec](docs/specs/MAF_SPEC.md)
-- [Next-step development specs](docs/specs/NEXT_STEPS_DEVELOPMENT_SPECS.md)
-- [Adversarial review findings](docs/specs/ADVERSARIAL_REVIEW_NEXT_STEPS.md)
-- [Development guide](docs/DEVELOPMENT.md)
-- [Deployment notes](docs/DEPLOYMENT.md)
+- No Calibre integration.
+- No Audiobookshelf importing or metadata management.
+- No file moving/copying/hardlinking/renaming/transcoding in the default workflow.
+- Not safe to expose directly to the public Internet.
 
-## Runtime configuration
+## Quick start with Docker Compose / Dockge
+
+Create a stack directory containing `docker-compose.yml` and `.env`.
+
+### `docker-compose.yml`
+
+```yaml
+services:
+  mam-audiofinder:
+    image: seanap/maf:latest
+    container_name: mam-audiofinder
+    ports:
+      - "8008:8080"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+```
+
+### `.env`
 
 ```env
+TZ=America/New_York
+DATA_DIR=/data
 DISABLE_SETUP=1
 LIBRARY_MODE=qbit_abs_shared
 ENABLE_IMPORT=0
 
-MAM_COOKIE=REDACTED
+# Paste your MAM cookie value. Do not commit this file.
+MAM_COOKIE=replace_me
 
-QB_URL=http://192.168.1.125:8080
-QB_USER=
-QB_PASS=
+# qBittorrent Web UI URL reachable from the MAF container.
+QB_URL=http://qbittorrent:8080
+QB_USER=replace_me
+QB_PASS=replace_me
+
+# Leave blank to let qBittorrent use its configured default save path.
 QB_SAVEPATH=
 QB_CATEGORY=maf
 QB_TAGS=MAM,audiobook,maf
@@ -48,10 +80,37 @@ QB_TAGS=MAM,audiobook,maf
 WEDGE_MODE=smart
 WEDGE_UNKNOWN_FALLBACK=true
 
-ABS_URL=http://192.168.1.9:13378
+# Optional. Only needed for the history "Resolve ABS" helper.
+ABS_URL=
+ABS_TOKEN=
+ABS_LIBRARY_ID=
 ```
 
-Leave `QB_SAVEPATH` blank for Sean's setup so qBit uses its Windows default save path.
+Then deploy:
+
+```bash
+docker compose up -d
+docker compose logs -f mam-audiofinder
+```
+
+Open `http://<docker-host>:8008/` from your trusted LAN or Tailscale network.
+
+## Configuration notes
+
+- `/data/config.json`, if created by the setup UI, overrides matching environment variables.
+- `DISABLE_SETUP=1` hides and disables the setup UI after configuration.
+- Leave `QB_SAVEPATH` empty for the recommended qBit+Audiobookshelf shared-folder workflow.
+- MAM RSS feed URLs are stored server-side in `/data/history.db`; browser/API responses return redacted feed URLs.
+- The app fetches private `.torrent` bytes server-side. Private MAM download URLs are not sent to the browser or qBittorrent.
+
+## Security notes
+
+MAF stores private MAM cookies/RSS URLs and can add torrents to qBittorrent. Treat it as a control-plane service.
+
+- Run only on trusted LAN/Tailscale, or put a real authenticated reverse proxy in front of it.
+- Never commit `.env`, `/data`, SQLite DBs, logs containing cookies, or generated config files.
+- Rotate your MAM cookie if it was ever committed or pasted into public logs.
+- Do not expose raw MAF directly to the public Internet.
 
 ## Local development
 
@@ -62,6 +121,7 @@ node --check app/static/app.js
 docker compose config >/tmp/maf-compose-config.txt
 ```
 
-## Security notes
+## Project documentation
 
-MAF stores private MAM cookies/RSS URLs and can add torrents to qBittorrent. Run it only on trusted LAN/Tailscale unless you put real authentication in front of it. API responses and UI must never expose MAM cookies, private RSS URLs, qBit passwords, ABS tokens, or private MAM download URLs.
+- [Deployment notes](docs/DEPLOYMENT.md)
+- [Development guide](docs/DEVELOPMENT.md)

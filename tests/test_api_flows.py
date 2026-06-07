@@ -13,7 +13,7 @@ def load_app(tmp_path: Path):
     os.environ["DB_PATH"] = str(tmp_path / "data" / "maf.sqlite3")
     os.environ["APP_CONFIG_PATH"] = str(tmp_path / "data" / "config.json")
     os.environ["MAM_COOKIE"] = "mam_id=fake"
-    os.environ["QB_URL"] = "http://192.168.1.125:8080"
+    os.environ["QB_URL"] = "http://10.0.0.2:8080"
     sys.modules.pop("app.main", None)
     return importlib.import_module("app.main")
 
@@ -31,7 +31,7 @@ def test_api_add_fetches_torrent_bytes_and_marks_history(monkeypatch, tmp_path):
 
     class FakeQbit:
         def __init__(self, url, user, password):
-            assert url == "http://192.168.1.125:8080"
+            assert url == "http://10.0.0.2:8080"
         async def add_torrent_bytes(self, **kwargs):
             calls.append(("qbit", kwargs))
             assert kwargs["savepath"] == ""
@@ -117,30 +117,32 @@ def test_api_search_respects_requested_perpage_after_m4b_filter(monkeypatch, tmp
     assert data["perpage"] == 25
 
 
-def test_feed_api_exposes_local_urls_and_lists_items(tmp_path):
+def test_feed_api_redacts_urls_and_lists_items(tmp_path):
     mod = load_app(tmp_path)
     client = TestClient(mod.app)
 
-    created = client.post("/api/feeds", json={"name": "Series", "kind": "series", "url": "https://www.myanonamouse.net/rss.php?passkey=secret"})
+    created = client.post("/api/feeds", json={"name": "Series", "kind": "series", "url": "https://www.myanonamouse.net/rss.php?passkey=fake"})
 
     assert created.status_code == 200
-    assert created.json()["url"] == "https://www.myanonamouse.net/rss.php?passkey=secret"
+    assert "fake" not in created.json()["url"]
+    assert "[REDACTED]" in created.json()["url"]
     assert "url_secret" not in created.json()
     listed = client.get("/api/feeds")
     assert listed.status_code == 200
-    assert listed.json()["items"][0]["url"].endswith("passkey=secret")
+    assert "fake" not in listed.json()["items"][0]["url"]
 
 
 def test_feed_api_patch_and_delete(tmp_path):
     mod = load_app(tmp_path)
     client = TestClient(mod.app)
-    created = client.post("/api/feeds", json={"name": "Series", "kind": "series", "url": "https://www.myanonamouse.net/rss.php?passkey=secret"})
+    created = client.post("/api/feeds", json={"name": "Series", "kind": "series", "url": "https://www.myanonamouse.net/rss.php?passkey=fake"})
     assert created.status_code == 200
 
     patched = client.patch(f"/api/feeds/{created.json()['id']}", json={"name": "Updated", "enabled": False})
     assert patched.status_code == 200
     assert patched.json()["name"] == "Updated"
-    assert patched.json()["url"].endswith("passkey=secret")
+    assert "fake" not in patched.json()["url"]
+    assert "[REDACTED]" in patched.json()["url"]
     deleted = client.delete(f"/api/feeds/{created.json()['id']}")
     assert deleted.status_code == 200
 
@@ -225,15 +227,17 @@ def test_frontend_uses_new_api_contracts():
     assert "No rows match the active filters" in app_js
 
 
-def test_frontend_cover_and_description_preview_interactions_exist():
+def test_frontend_cover_preview_and_download_button_contracts():
     app_js = Path("app/static/app.js").read_text()
     html = Path("app/templates/index.html").read_text()
 
     assert "showCoverPreview" in app_js
     assert "cover-preview-popover" in html
     assert "mouseenter" in app_js
-    assert "showDescriptionPopover" in app_js
-    assert "click-away" in app_js or "closeAllPreviews" in app_js
+    assert "label:'DL'" in app_js
+    assert "actionButton('⬇'" in app_js
+    assert "showDescriptionPopover" not in app_js
+    assert "desc-popover" not in html
     assert "Escape" in app_js
 
 

@@ -1,30 +1,25 @@
-# MAF Docker/Dockge Deployment Notes
+# MAF Docker / Dockge Deployment
 
 ## Production shape
 
-MAF should run as a small Docker service with only `/data` persisted. It does not need the Audiobookshelf library mounted because qBittorrent already downloads into the folder ABS scans.
+MAF should run as a small Docker service with only `/data` persisted. In the default workflow it does not need the Audiobookshelf library or qBittorrent download directory mounted because qBittorrent downloads to its configured default folder and Audiobookshelf scans that same folder.
 
-## Sean's environment
+Expose MAF only to a trusted LAN/Tailscale network unless you add authentication in front of it.
 
-- qBittorrent: `http://192.168.1.125:8080`
-- qBit default save path: configured on Windows; leave `QB_SAVEPATH` blank.
-- Audiobookshelf: `http://192.168.1.9:13378`
-- ABS scans `/audiobooks`, backed by host mount `/mnt/htpcaudiobooks` in the ABS stack.
-
-## Draft Dockge compose
+## Dockge compose
 
 ```yaml
 services:
-  maf:
+  mam-audiofinder:
     image: seanap/maf:latest
-    container_name: maf
+    container_name: mam-audiofinder
     restart: unless-stopped
     ports:
       - "8008:8080"
     env_file:
       - .env
     volumes:
-      - /opt/stacks/maf/data:/data
+      - ./data:/data
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
       interval: 30s
@@ -33,7 +28,7 @@ services:
       start_period: 20s
 ```
 
-## Draft `.env`
+## `.env`
 
 ```env
 TZ=America/New_York
@@ -42,11 +37,11 @@ DISABLE_SETUP=1
 LIBRARY_MODE=qbit_abs_shared
 ENABLE_IMPORT=0
 
-MAM_COOKIE=REDACTED
+MAM_COOKIE=replace_me
 
-QB_URL=http://192.168.1.125:8080
-QB_USER=
-QB_PASS=
+QB_URL=http://qbittorrent:8080
+QB_USER=replace_me
+QB_PASS=replace_me
 QB_SAVEPATH=
 QB_CATEGORY=maf
 QB_TAGS=MAM,audiobook,maf
@@ -54,19 +49,27 @@ QB_TAGS=MAM,audiobook,maf
 WEDGE_MODE=smart
 WEDGE_UNKNOWN_FALLBACK=true
 
-ABS_URL=http://192.168.1.9:13378
+# Optional Audiobookshelf history resolver.
+ABS_URL=
+ABS_TOKEN=
+ABS_LIBRARY_ID=
 ```
 
-## Verification before production pull
+## Verification before production use
 
 ```bash
 docker compose config
-curl -fsS http://192.168.1.125:8080/api/v2/app/version
-curl -fsS http://192.168.1.9:13378/status
+docker compose up -d
+docker compose ps
+curl -fsS http://127.0.0.1:8008/health
 ```
 
-Then deploy to Dockge as a test stack first. Add one known-safe MAM item manually, verify it appears in qBit, then verify ABS sees it after scan.
+Then open the UI from a trusted LAN/Tailscale client, add one known-safe MAM item, verify it appears in qBittorrent, and verify Audiobookshelf sees it after its scan.
 
 ## Security warning
 
-MAF is a control-plane service that can add torrents to qBit and stores private MAM RSS URLs. Expose only on trusted LAN/Tailscale unless an authenticated reverse proxy is added. Do not publish this raw app to the public Internet, because humans click things.
+MAF is a control-plane service. It stores a MAM cookie and private RSS URLs, and it can add torrents to qBittorrent.
+
+- Do not commit `.env`, `/data`, SQLite DBs, or logs that may contain private values.
+- Browser/API feed responses are redacted; `/data/history.db` still contains private RSS URLs by design.
+- Do not publish the raw app to the public Internet.
