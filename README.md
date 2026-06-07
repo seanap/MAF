@@ -1,15 +1,7 @@
 # MAF — MAM Audiobook Finder
 
-MAF is a small self-hosted web frontend for a MAM-only audiobook request workflow.
-It searches MyAnonamouse, monitors configured MAM RSS feeds, applies a smart Freeleech Wedge policy, and sends server-fetched `.torrent` bytes to qBittorrent.
-
-The intended production flow is deliberately boring:
-
-```text
-MAF → fetch torrent from MAM server-side → qBittorrent → Audiobookshelf scan/match
-```
-
-qBittorrent downloads to its own configured default folder. Audiobookshelf scans that same folder and handles matching/metadata. MAF does **not** need to mount, move, rename, hardlink, transcode, or organize your audiobook files.
+MAF is a small self-hosted web frontend for a MAM-only audiobook request workflow. When paired with Tailscale, its perfect for quickly grabbing a book while away from home.
+It searches MAM only, monitors configured MAM RSS feeds, applies a smart Freeleech Wedge policy, and sends server-fetched `.torrent` to a local qBittorrent client, which can dl to its own configured default folder. Audiobookshelf scans that same folder and handles matching/metadata. MAF does **not** mount, move, rename, hardlink, transcode, or organize your audiobook files.
 
 <img width="3497" height="1999" alt="Screenshot 2026-06-07 102233(1)" src="https://github.com/user-attachments/assets/cf701285-f317-4b47-a9fd-f0e6553b0f5e" />
 <img width="3493" height="1701" alt="Screenshot 2026-06-07 102343" src="https://github.com/user-attachments/assets/42a98a85-b809-4855-a83e-339251b2ba2b" />
@@ -114,15 +106,6 @@ MAF stores private MAM cookies/RSS URLs and can add torrents to qBittorrent. Tre
 - Never commit `.env`, `/data`, SQLite DBs, logs containing cookies, or generated config files.
 - Rotate your MAM cookie if it was ever committed or pasted into public logs.
 - Do not expose raw MAF directly to the public Internet.
-
-## Local development
-
-```bash
-uv run --with-requirements requirements.txt --with pytest python -m pytest -q
-python3 -m py_compile app/main.py app/mam.py app/qbit.py app/history_store.py app/wedge.py app/presets.py app/rss.py app/models.py
-node --check app/static/app.js
-docker compose config >/tmp/maf-compose-config.txt
-```
 
 ## Project documentation
 
