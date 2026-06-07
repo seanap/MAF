@@ -225,6 +225,18 @@ def test_frontend_uses_new_api_contracts():
     assert "No rows match the active filters" in app_js
 
 
+def test_frontend_cover_and_description_preview_interactions_exist():
+    app_js = Path("app/static/app.js").read_text()
+    html = Path("app/templates/index.html").read_text()
+
+    assert "showCoverPreview" in app_js
+    assert "cover-preview-popover" in html
+    assert "mouseenter" in app_js
+    assert "showDescriptionPopover" in app_js
+    assert "click-away" in app_js or "closeAllPreviews" in app_js
+    assert "Escape" in app_js
+
+
 def test_root_page_renders_review_ui(tmp_path):
     mod = load_app(tmp_path)
     client = TestClient(mod.app)

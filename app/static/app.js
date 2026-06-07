@@ -7,8 +7,11 @@ function parseDate(v) { const t=Date.parse(String(v||'').replace(' ','T')); retu
 function lighten(hex, alpha='22') { return /^#[0-9a-fA-F]{6}$/.test(hex||'') ? `${hex}${alpha}` : '#eef6ff55'; }
 async function jsonFetch(url, options={}) { const r=await fetch(url, options); const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.detail||j.message||`HTTP ${r.status}`); return j; }
 function closeFilterMenus(except=null) { document.querySelectorAll('.filter-menu').forEach(x=>{ if(x!==except) x.remove(); }); }
-document.addEventListener('click', e=>{ if(!e.target.closest('.filter-menu') && !e.target.closest('.filter-btn') && !e.target.closest('.desc-popover')) closeFilterMenus(); });
-document.addEventListener('keydown', e=>{ if(e.key==='Escape') { closeFilterMenus(); closeDescriptionPopover(); } });
+document.addEventListener('click', e=>{
+  if(!e.target.closest('.filter-menu') && !e.target.closest('.filter-btn')) closeFilterMenus();
+  if(!e.target.closest('.desc-popover') && !e.target.closest('.cover-preview-popover') && !e.target.closest('.cover-wrap') && !e.target.closest('tr[data-has-description="1"]')) closeAllPreviews(); // click-away
+});
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') { closeFilterMenus(); closeAllPreviews(); } });
 
 // ---------- Shared description popover ----------
 let descPopover;
@@ -19,15 +22,35 @@ function ensureDescriptionPopover(){
   descPopover.querySelector('.desc-close').addEventListener('click', closeDescriptionPopover);
   document.body.appendChild(descPopover); return descPopover;
 }
-function closeDescriptionPopover(){ if(descPopover) descPopover.classList.add('hidden'); document.querySelectorAll('.desc-btn[aria-expanded="true"]').forEach(b=>b.setAttribute('aria-expanded','false')); }
+function closeDescriptionPopover(){ if(descPopover) descPopover.classList.add('hidden'); document.querySelectorAll('[data-preview-expanded="description"]').forEach(b=>b.removeAttribute('data-preview-expanded')); document.querySelectorAll('.desc-btn[aria-expanded="true"]').forEach(b=>b.setAttribute('aria-expanded','false')); }
 function itemDescription(it){ return String(it.description_preview || it.description || it.desc || it.summary || '').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim(); }
 function showDescriptionPopover(anchor,it){
-  const desc=itemDescription(it); if(!desc) return;
+  const desc=itemDescription(it) || 'MAM did not include a torrent description in this row. Add a full MAM session-backed description source later if you want live detail-page extraction.';
   const pop=ensureDescriptionPopover(); pop.querySelector('.desc-title').textContent=it.title||'Description'; pop.querySelector('.desc-body').textContent=desc; pop.classList.remove('hidden');
-  document.querySelectorAll('.desc-btn[aria-expanded="true"]').forEach(b=>b.setAttribute('aria-expanded','false')); anchor.setAttribute('aria-expanded','true');
+  document.querySelectorAll('.desc-btn[aria-expanded="true"]').forEach(b=>b.setAttribute('aria-expanded','false')); if(anchor.setAttribute){ anchor.setAttribute('data-preview-expanded','description'); if(anchor.classList?.contains('desc-btn')) anchor.setAttribute('aria-expanded','true'); }
   const rect=anchor.getBoundingClientRect(); const narrow=matchMedia('(max-width: 680px)').matches;
   if(narrow){ pop.style.left='10px'; pop.style.right='10px'; pop.style.top='auto'; pop.style.bottom='12px'; }
   else { pop.style.right='auto'; pop.style.bottom='auto'; pop.style.left=`${Math.min(window.innerWidth-380, Math.max(8, rect.right+8))}px`; pop.style.top=`${Math.min(window.innerHeight-260, Math.max(8, rect.top))}px`; }
+}
+
+// ---------- Shared cover preview ----------
+let coverPopover;
+function ensureCoverPopover(){
+  if(coverPopover) return coverPopover;
+  coverPopover=document.createElement('div'); coverPopover.id='coverPreviewPopover'; coverPopover.className='cover-preview-popover hidden'; coverPopover.setAttribute('role','dialog'); coverPopover.setAttribute('aria-modal','false');
+  coverPopover.innerHTML='<button type="button" class="cover-preview-close" aria-label="Close cover preview">×</button><img class="cover-preview-img" alt="Expanded cover"><div class="cover-preview-title"></div>';
+  coverPopover.querySelector('.cover-preview-close').addEventListener('click', closeCoverPreview);
+  document.body.appendChild(coverPopover); return coverPopover;
+}
+function closeCoverPreview(){ if(coverPopover) coverPopover.classList.add('hidden'); document.querySelectorAll('[data-preview-expanded="cover"]').forEach(b=>b.removeAttribute('data-preview-expanded')); }
+function closeAllPreviews(){ closeDescriptionPopover(); closeCoverPreview(); }
+function showCoverPreview(anchor,it){
+  const source=anchor?.currentSrc || anchor?.src || anchor?.dataset?.src; if(!source) return;
+  const pop=ensureCoverPopover(); const img=pop.querySelector('.cover-preview-img'); img.src=source; img.alt=`Expanded cover for ${it.title||'book'}`; pop.querySelector('.cover-preview-title').textContent=it.title||'Cover'; pop.classList.remove('hidden');
+  if(anchor.setAttribute) anchor.setAttribute('data-preview-expanded','cover');
+  const rect=anchor.getBoundingClientRect(); const narrow=matchMedia('(max-width: 680px)').matches;
+  if(narrow){ pop.style.left='10px'; pop.style.right='10px'; pop.style.top='auto'; pop.style.bottom='12px'; }
+  else { pop.style.right='auto'; pop.style.bottom='auto'; pop.style.left=`${Math.min(window.innerWidth-310, Math.max(8, rect.right+10))}px`; pop.style.top=`${Math.min(window.innerHeight-430, Math.max(8, rect.top-20))}px`; }
 }
 
 // ---------- Lazy cover loader ----------
@@ -76,7 +99,7 @@ class DataTable {
   sorted(rows) { if(!this.sort) return rows; const col=this.columns.find(c=>c.key===this.sort.key); if(!col) return rows; const dir=this.sort.dir==='desc'?-1:1; return [...rows].sort((a,b)=>{ let av=col.value(a), bv=col.value(b); if(col.type==='number'){av=Number(av)||0; bv=Number(bv)||0; return (av-bv)*dir;} if(col.type==='date'){return (parseDate(av)-parseDate(bv))*dir;} return String(av??'').localeCompare(String(bv??''), undefined, {numeric:true,sensitivity:'base'})*dir; }); }
   render() {
     const rows=this.sorted(this.rows.filter(r=>this.passes(r))); const frag=document.createDocumentFragment();
-    rows.forEach(row=>{ const tr=document.createElement('tr'); if(this.opts.rowStyle) tr.setAttribute('style', this.opts.rowStyle(row)||''); this.columns.forEach(col=>{ const td=document.createElement('td'); td.className=col.className||''; if(col.mobileLabel) td.setAttribute('data-label', col.label); const rendered=col.render ? col.render(row) : escapeHtml(col.value(row)); if(rendered instanceof Node) td.appendChild(rendered); else td.innerHTML=rendered; tr.appendChild(td); }); frag.appendChild(tr); });
+    rows.forEach(row=>{ const tr=document.createElement('tr'); if(this.opts.rowStyle) tr.setAttribute('style', this.opts.rowStyle(row)||''); if(this.opts.enableRowDescription && (itemDescription(row) || row.torrent_id || row.id)){ tr.dataset.hasDescription='1'; tr.title='Hover or click for MAM description'; tr.addEventListener('mouseenter',()=>showDescriptionPopover(tr,row)); tr.addEventListener('click',e=>{ if(e.target.closest('a,button,input,select,textarea,.filter-menu,.cover-wrap')) return; e.stopPropagation(); showDescriptionPopover(tr,row); }); } this.columns.forEach(col=>{ const td=document.createElement('td'); td.className=col.className||''; if(col.mobileLabel) td.setAttribute('data-label', col.label); const rendered=col.render ? col.render(row) : escapeHtml(col.value(row)); if(rendered instanceof Node) td.appendChild(rendered); else td.innerHTML=rendered; tr.appendChild(td); }); frag.appendChild(tr); });
     if(!rows.length && this.hasLoaded){ const tr=document.createElement('tr'); const td=document.createElement('td'); td.colSpan=this.columns.length; td.className='center muted empty-row'; td.textContent=this.rows.length ? 'No rows match the active filters. Adjust a column filter above.' : (this.opts.emptyMessage || 'No rows.'); tr.appendChild(td); frag.appendChild(tr); }
     this.tbody.replaceChildren(frag); this.table.style.display = this.hasLoaded ? '' : 'none';
     [...this.thead.querySelectorAll('th')].forEach((th,i)=>{ const mark=th.querySelector('.sort-mark'); if(mark){ const col=this.columns[i]; mark.textContent=(this.sort&&this.sort.key===col.key) ? (this.sort.dir==='asc'?'▲':'▼') : ''; }});
@@ -94,8 +117,8 @@ function actionButton(text, fn, disabled=false){ const b=document.createElement(
 function coverCell(it){
   const box=document.createElement('div'); box.className='cover-wrap'; const id=it.torrent_id||it.id; const cover=it.cover_url || (id ? `/api/mam/cover/${encodeURIComponent(String(id))}` : '');
   const img=document.createElement('img'); img.className='book-cover-thumb'; img.loading='lazy'; img.decoding='async'; img.fetchPriority='low'; img.alt=`Cover for ${it.title||'book'}`;
-  if(cover){ img.dataset.src=cover; observeCover(img); } else { box.classList.add('is-missing-cover'); }
-  img.onerror=()=>{ box.classList.add('is-missing-cover'); img.removeAttribute('src'); img.removeAttribute('data-src'); img.alt='No cover'; };
+  if(cover){ img.dataset.src=cover; observeCover(img); img.addEventListener('mouseenter',()=>showCoverPreview(img,it)); img.addEventListener('click',e=>{ e.stopPropagation(); showCoverPreview(img,it); }); } else { box.classList.add('is-missing-cover'); }
+  img.onerror=()=>{ box.classList.add('is-missing-cover'); img.removeAttribute('src'); img.removeAttribute('data-src'); img.alt='No cover'; closeCoverPreview(); };
   box.appendChild(img); const desc=itemDescription(it); if(desc){ const btn=document.createElement('button'); btn.type='button'; btn.className='desc-btn'; btn.textContent='i'; btn.setAttribute('aria-expanded','false'); btn.setAttribute('aria-label',`Show description for ${it.title||'book'}`); btn.addEventListener('click', e=>{ e.stopPropagation(); showDescriptionPopover(btn,it); }); box.appendChild(btn); }
   return box;
 }
@@ -113,7 +136,7 @@ function initSearchTable(){
     {key:'uploaded', label:'Uploaded', type:'date', sortable:true, className:'hide-mobile', value:r=>r.uploaded_at||r.added||''},
     {key:'mam', label:'MAM', className:'center', value:r=>r.torrent_id||r.id||'', render:r=>{ const url=mamLink(r.torrent_id||r.id); return url ? `<a href="${url}" target="_blank" rel="noopener noreferrer">MAM</a>` : ''; }},
     {key:'add', label:'Add', value:r=>'', render:r=>actionButton('Add', async e=>addTorrentFromItem(e.currentTarget,r), !(r.torrent_id||r.id))},
-  ], {onRender:(shown,total)=> statusEl.textContent=`${shown} of ${total} result(s) shown`});
+  ], {enableRowDescription:true,onRender:(shown,total)=> statusEl.textContent=`${shown} of ${total} result(s) shown`});
 }
 async function runSearch(){
   const text=(q?.value||'').trim(); const sortType=sortSel?.value||'snatchedDesc'; const windowValue=windowSel?.value||''; const perpage=parseInt(perpageSel?.value||'25',10);
@@ -139,7 +162,7 @@ function initRssTable(){ rssTable = new DataTable($('rssItems'), [
   {key:'mam', label:'MAM', className:'center', value:r=>r.torrent_id||'', render:r=>r.details_url?`<a href="${escapeHtml(r.details_url)}" target="_blank" rel="noopener noreferrer">MAM</a>`:''},
   {key:'add', label:'Add', value:r=>'', render:r=>actionButton('Add', async e=>{ await addTorrentFromItem(e.currentTarget,r); await loadRssItems(); }, !r.torrent_id)},
   {key:'hide', label:'Hide', value:r=>'', render:r=>actionButton('Hide', async()=>{ await jsonFetch('/api/history/hide',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({canonical_key:r.canonical_key})}); await loadRssItems(); })},
-], {rowStyle:r=>`background:${lighten(r.feed_color)}`}); rssTable.sort={key:'added', dir:'desc'}; }
+], {enableRowDescription:true,rowStyle:r=>`background:${lighten(r.feed_color)}`}); rssTable.sort={key:'added', dir:'desc'}; }
 async function loadRssItems(){ try { const j=await jsonFetch('/api/rss/items?combined=true&include_hidden=false&include_grabbed=false&limit=200'); rssTable.setRows(j.items||[]); } catch(e){ console.error('rss items failed',e); } }
 async function loadFeedSettings(){
   if(!$('feeds')) return; feedSettingsLoaded=true;
