@@ -109,6 +109,7 @@ MAF stores private MAM cookies/RSS URLs and can add torrents to qBittorrent. Tre
 
 ## Project documentation
 
+- [Preliminary Qbit Config](docs/qbit_config.md)
 - [Deployment notes](docs/DEPLOYMENT.md)
 - [Development guide](docs/DEVELOPMENT.md)
 
