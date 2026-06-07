@@ -111,3 +111,9 @@ MAF stores private MAM cookies/RSS URLs and can add torrents to qBittorrent. Tre
 
 - [Deployment notes](docs/DEPLOYMENT.md)
 - [Development guide](docs/DEVELOPMENT.md)
+
+## Thanks! <3
+
+- Inspired heavily by [Audiofinder](https://github.com/raygan/mam-audiofinder)
+- Borrowed advanced WEDGE config from [Shelfmark](https://github.com/calibrain/shelfmark)
+- Developed by AI - Hermes-Agent using Codex GPT5.5 
