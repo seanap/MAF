@@ -4,6 +4,8 @@ import pytest
 
 from app.presets import (
     ADVANCED_SEARCH_FIELDS,
+    AUDIOBOOK_CATEGORY_IDS,
+    EBOOK_CATEGORY_IDS,
     TARGETED_SEARCH_FIELDS,
     build_default_advanced_m4b_payload,
     build_m4b_search_payload,
@@ -87,3 +89,33 @@ def test_build_m4b_payload_rejects_unknown_sort():
     payload = build_m4b_search_payload(q="dune", sort="bananaDesc")
 
     assert payload["tor"]["sortType"] == "snatchedDesc"
+
+
+def test_search_type_audiobook_uses_audio_categories_without_m4b_filter():
+    payload, meta = build_search_payload_for_query(q=" dune ", window="all", search_type="audiobook", today=date(2026, 6, 5))
+
+    assert payload["tor"]["text"] == "dune"
+    assert payload["tor"]["main_cat"] == AUDIOBOOK_CATEGORY_IDS
+    assert 0 not in payload["tor"]["main_cat"]
+    assert payload["tor"]["srchIn"] == TARGETED_SEARCH_FIELDS
+    assert meta["type"] == "audiobook"
+    assert meta["format_filter"] == ""
+
+
+def test_search_type_all_uses_audio_and_ebook_categories_for_blank_query():
+    payload, meta = build_search_payload_for_query(q="", window="past_3_months", search_type="all", today=date(2026, 6, 5))
+
+    assert payload["tor"]["text"] == ""
+    assert payload["tor"]["main_cat"] == AUDIOBOOK_CATEGORY_IDS + EBOOK_CATEGORY_IDS
+    assert payload["tor"]["srchIn"] == ADVANCED_SEARCH_FIELDS
+    assert payload["tor"]["startDate"] == "2026-03-05"
+    assert meta["type"] == "all"
+    assert meta["format_filter"] == ""
+
+
+def test_unknown_search_type_falls_back_to_m4b_default():
+    payload, meta = build_search_payload_for_query(q="", search_type="banana", today=date(2026, 6, 5))
+
+    assert payload["tor"]["text"] == "m4b"
+    assert meta["type"] == "m4b"
+    assert meta["format_filter"] == "m4b"

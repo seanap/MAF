@@ -6,6 +6,16 @@ function formatSize(sz) { const n=Number(sz); if(!Number.isFinite(n)) return sz 
 function parseDate(v) { const t=Date.parse(String(v||'').replace(' ','T')); return Number.isFinite(t) ? t : 0; }
 function lighten(hex, alpha='22') { return /^#[0-9a-fA-F]{6}$/.test(hex||'') ? `${hex}${alpha}` : '#eef6ff55'; }
 async function jsonFetch(url, options={}) { const r=await fetch(url, options); const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.detail||j.message||`HTTP ${r.status}`); return j; }
+function positionFilterMenu(anchor, menu) {
+  const rect = anchor.getBoundingClientRect();
+  const margin = 8;
+  const menuWidth = Math.min(Math.max(menu.offsetWidth || 250, 250), window.innerWidth - margin * 2);
+  const left = Math.min(window.innerWidth - menuWidth - margin, Math.max(margin, rect.left));
+  const top = Math.min(window.innerHeight - margin, Math.max(margin, rect.bottom + 4));
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+  menu.style.minWidth = `${menuWidth}px`;
+}
 function closeFilterMenus(except=null) { document.querySelectorAll('.filter-menu').forEach(x=>{ if(x!==except) x.remove(); }); }
 document.addEventListener('click', e=>{
   if(!e.target.closest('.filter-menu') && !e.target.closest('.filter-btn')) closeFilterMenus();
@@ -58,11 +68,11 @@ class DataTable {
   uniqueValues(col) { const vals = new Set(); this.rows.forEach(row => vals.add(String(col.value(row) ?? '').trim() || '(blank)')); return [...vals].sort((a,b)=>a.localeCompare(b, undefined, {numeric:true, sensitivity:'base'})); }
   renderHeader() {
     const tr=document.createElement('tr');
-    this.columns.forEach(col=>{ const th=document.createElement('th'); th.className=col.className||''; const label=document.createElement('span'); label.textContent=col.label; if(col.sortable) label.className='th-sort'; label.addEventListener('click',()=>{ if(col.sortable) this.cycleSort(col.key); }); th.appendChild(label); const sortMark=document.createElement('span'); sortMark.className='sort-mark'; sortMark.style.marginLeft='.25rem'; th.appendChild(sortMark); if(col.filter) { const b=document.createElement('button'); b.type='button'; b.className='filter-btn'; b.textContent='▾'; b.title=`Filter ${col.label}`; b.setAttribute('aria-haspopup','true'); b.addEventListener('click',(e)=>{e.stopPropagation(); this.openFilter(th,col);}); th.appendChild(b); } tr.appendChild(th); });
+    this.columns.forEach(col=>{ const th=document.createElement('th'); th.className=col.className||''; const label=document.createElement('span'); label.textContent=col.label; if(col.sortable) label.className='th-sort'; label.addEventListener('click',()=>{ if(col.sortable) this.cycleSort(col.key); }); th.appendChild(label); const sortMark=document.createElement('span'); sortMark.className='sort-mark'; sortMark.style.marginLeft='.25rem'; th.appendChild(sortMark); if(col.filter) { const b=document.createElement('button'); b.type='button'; b.className='filter-btn'; b.textContent='▾'; b.title=`Filter ${col.label}`; b.setAttribute('aria-haspopup','true'); b.addEventListener('click',(e)=>{e.stopPropagation(); this.openFilter(b,col);}); th.appendChild(b); } tr.appendChild(th); });
     this.thead.replaceChildren(tr);
   }
   cycleSort(key) { if(!this.sort || this.sort.key!==key) this.sort={key, dir:'asc'}; else if(this.sort.dir==='asc') this.sort.dir='desc'; else this.sort=null; this.render(); }
-  openFilter(th,col) {
+  openFilter(anchor,col) {
     closeFilterMenus(); const menu=document.createElement('div'); menu.className='filter-menu'; menu.addEventListener('click', e=>e.stopPropagation());
     const search=document.createElement('input'); search.type='text'; search.placeholder='Find values'; menu.appendChild(search);
     const actions=document.createElement('div'); actions.className='row'; const all=document.createElement('button'); all.type='button'; all.textContent='Select all'; const none=document.createElement('button'); none.type='button'; none.textContent='Select none'; const selectFiltered=document.createElement('button'); selectFiltered.type='button'; selectFiltered.textContent='Select matching'; const close=document.createElement('button'); close.type='button'; close.textContent='Close'; actions.append(all, none, selectFiltered, close); menu.appendChild(actions);
@@ -72,7 +82,7 @@ class DataTable {
     const visibleValues=()=>{ const needle=search.value.toLowerCase(); return values.filter(v=>v.toLowerCase().includes(needle)).slice(0,200); };
     const draw=()=>{ list.innerHTML=''; visibleValues().forEach(v=>{ const lab=document.createElement('label'); const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=current.has(v); cb.addEventListener('change',()=>{ cb.checked ? current.add(v) : current.delete(v); save(); draw(); }); lab.append(cb, document.createTextNode(` ${v}`)); list.appendChild(lab); }); if(!list.children.length) list.innerHTML='<div class="muted">No matching values.</div>'; };
     all.onclick=()=>{ values.forEach(v=>current.add(v)); save(); draw(); }; none.onclick=()=>{ current.clear(); this.filters[col.key]=[]; this.render(); draw(); }; selectFiltered.onclick=()=>{ current.clear(); visibleValues().forEach(v=>current.add(v)); save(); draw(); }; close.onclick=()=>menu.remove();
-    search.oninput=draw; th.appendChild(menu); search.focus(); draw();
+    search.oninput=draw; document.body.appendChild(menu); positionFilterMenu(anchor, menu); search.focus(); draw();
   }
   passes(row) { return this.columns.every(col=>{ const selected=this.filters[col.key]; if(!selected) return true; const val=String(col.value(row) ?? '').trim() || '(blank)'; return selected.includes(val); }); }
   sorted(rows) { if(!this.sort) return rows; const col=this.columns.find(c=>c.key===this.sort.key); if(!col) return rows; const dir=this.sort.dir==='desc'?-1:1; return [...rows].sort((a,b)=>{ let av=col.value(a), bv=col.value(b); if(col.type==='number'){av=Number(av)||0; bv=Number(bv)||0; return (av-bv)*dir;} if(col.type==='date'){return (parseDate(av)-parseDate(bv))*dir;} return String(av??'').localeCompare(String(bv??''), undefined, {numeric:true,sensitivity:'base'})*dir; }); }
@@ -87,7 +97,7 @@ class DataTable {
 }
 
 // ---------- DOM ----------
-const form=$('searchForm'), q=$('q'), sortSel=$('sort'), windowSel=$('window'), perpageSel=$('perpage'), statusEl=$('status');
+const form=$('searchForm'), q=$('q'), typeSel=$('type'), sortSel=$('sort'), windowSel=$('window'), perpageSel=$('perpage'), statusEl=$('status');
 let searchTable, rssTable, feedSettingsLoaded=false;
 if(q) q.focus();
 (async()=>{ try { const j=await jsonFetch('/health'); $('health').textContent=j.ok?'OK':'Not OK'; } catch { $('health').textContent='Error'; } })();
@@ -118,10 +128,10 @@ function initSearchTable(){
   ], {onRender:(shown,total)=> statusEl.textContent=`${shown} of ${total} result(s) shown`});
 }
 async function runSearch(){
-  const text=(q?.value||'').trim(); const sortType=sortSel?.value||'snatchedDesc'; const windowValue=windowSel?.value||''; const perpage=parseInt(perpageSel?.value||'25',10);
-  statusEl.textContent = text ? 'Searching…' : 'Running default 3-month MAM M4B search…';
-  const params=new URLSearchParams({q:text, perpage:String(perpage), window:windowValue, sort:sortType});
-  try { const data=await jsonFetch(`/api/search?${params}`); const rows=data.items||[]; searchTable.setRows(rows); statusEl.innerHTML = `${rows.length} result(s) shown${data.total !== undefined ? ` of ${data.total}` : ''}. <span class="pill">Preset: ${escapeHtml(data.preset||'')}</span> <span class="pill">Window: ${escapeHtml(data.window||'')}</span> <span class="pill">MAM sort: ${escapeHtml(data.sort||'')}</span>`; if($('historyCard')?.style.display !== 'none') await loadHistory(); }
+  const text=(q?.value||'').trim(); const searchType=typeSel?.value||'m4b'; const sortType=sortSel?.value||'snatchedDesc'; const windowValue=windowSel?.value||''; const perpage=parseInt(perpageSel?.value||'25',10);
+  statusEl.textContent = text ? 'Searching…' : `Running default 3-month MAM ${searchType.toUpperCase()} search…`;
+  const params=new URLSearchParams({q:text, type:searchType, perpage:String(perpage), window:windowValue, sort:sortType});
+  try { const data=await jsonFetch(`/api/search?${params}`); const rows=data.items||[]; searchTable.setRows(rows); statusEl.innerHTML = `${rows.length} result(s) shown${data.total !== undefined ? ` of ${data.total}` : ''}. <span class="pill">Type: ${escapeHtml(data.type||searchType)}</span> <span class="pill">Preset: ${escapeHtml(data.preset||'')}</span> <span class="pill">Window: ${escapeHtml(data.window||'')}</span> <span class="pill">MAM sort: ${escapeHtml(data.sort||'')}</span>`; if($('historyCard')?.style.display !== 'none') await loadHistory(); }
   catch(e){ console.error(e); statusEl.textContent=`Search failed: ${e.message||'unknown error'}`; }
 }
 if(form) form.addEventListener('submit', e=>{ e.preventDefault(); runSearch(); });

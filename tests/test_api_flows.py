@@ -117,6 +117,55 @@ def test_api_search_respects_requested_perpage_after_m4b_filter(monkeypatch, tmp
     assert data["perpage"] == 25
 
 
+def test_api_search_type_all_does_not_drop_non_m4b_results(monkeypatch, tmp_path):
+    mod = load_app(tmp_path)
+
+    class FakeMam:
+        def __init__(self, base, cookie):
+            pass
+        async def search(self, payload):
+            assert payload["tor"]["text"] == "dune"
+            return {"total": 3, "data": [
+                {"id": "123", "title": "Dune M4B", "format": "M4B", "isFree": "1"},
+                {"id": "456", "title": "Dune MP3", "format": "MP3", "isFree": "1"},
+                {"id": "789", "title": "Dune EPUB", "format": "EPUB", "isFree": "1"},
+            ]}
+
+    monkeypatch.setattr(mod, "MamClient", FakeMam)
+    client = TestClient(mod.app)
+
+    response = client.get("/api/search?q=dune&type=all&window=all&sort=snatchedDesc&perpage=25")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert [item["torrent_id"] for item in data["items"]] == ["123", "456", "789"]
+    assert data["type"] == "all"
+
+
+def test_api_search_cache_is_scoped_by_type(monkeypatch, tmp_path):
+    mod = load_app(tmp_path)
+    calls = []
+
+    class FakeMam:
+        def __init__(self, base, cookie):
+            pass
+        async def search(self, payload):
+            calls.append(tuple(payload["tor"]["main_cat"]))
+            return {"total": 1, "data": [{"id": "123", "title": "Dune MP3", "format": "MP3", "isFree": "1"}]}
+
+    monkeypatch.setattr(mod, "MamClient", FakeMam)
+    client = TestClient(mod.app)
+
+    m4b = client.get("/api/search?q=dune&type=m4b&window=all&sort=snatchedDesc&perpage=25")
+    audiobook = client.get("/api/search?q=dune&type=audiobook&window=all&sort=snatchedDesc&perpage=25")
+
+    assert m4b.status_code == 200
+    assert audiobook.status_code == 200
+    assert m4b.json()["items"] == []
+    assert [item["torrent_id"] for item in audiobook.json()["items"]] == ["123"]
+    assert len(calls) == 2
+
+
 def test_feed_api_redacts_urls_and_lists_items(tmp_path):
     mod = load_app(tmp_path)
     client = TestClient(mod.app)
@@ -225,6 +274,11 @@ def test_frontend_uses_new_api_contracts():
     assert "fetch('/api/torrents/add'" in app_js
     assert "coverCell" in app_js
     assert "No rows match the active filters" in app_js
+    assert "typeSel" in app_js
+    assert "type:searchType" in app_js
+    assert "document.body.appendChild(menu)" in app_js
+    assert "positionFilterMenu" in app_js
+    assert "getBoundingClientRect" in app_js
 
 
 def test_frontend_cover_preview_and_download_button_contracts():

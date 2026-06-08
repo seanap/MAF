@@ -253,8 +253,8 @@ def _mam_client() -> MamClient:
         return MamClient(settings.MAM_BASE, settings.MAM_COOKIE)
 
 
-def _search_cache_key(q: str, window: str, page: int, requested_perpage: int, sort: str) -> tuple[Any, ...]:
-    return ((q or "").strip(), window or "", max(0, int(page or 0)), int(requested_perpage), sort or "")
+def _search_cache_key(q: str, window: str, page: int, requested_perpage: int, sort: str, search_type: str) -> tuple[Any, ...]:
+    return ((q or "").strip(), window or "", max(0, int(page or 0)), int(requested_perpage), sort or "", search_type or "m4b")
 
 
 def _search_cache_get(key: tuple[Any, ...]) -> dict[str, Any] | None:
@@ -376,22 +376,25 @@ async def api_mam_cover(torrent_id: str):
     return FileResponse(cache_path, media_type=content_type or "image/webp", headers=_cover_headers(content_type or "image/webp"))
 
 @app.get("/api/search")
-async def api_search(q: str = "", window: str = "", page: int = 0, perpage: int = 25, sort: str = "snatchedDesc"):
+async def api_search(q: str = "", window: str = "", page: int = 0, perpage: int = 25, sort: str = "snatchedDesc", type: str = "m4b"):
     try:
         requested_perpage = min(100, max(1, int(perpage or 25)))
-        # MAM does not expose a reliable M4B-only API filter. Fetch a wider page,
-        # then apply the strict M4B filter server-side so the UI does not show a
-        # mostly-empty page when MAM's first few matches are EPUB/MP3.
-        payload, meta = build_search_payload_for_query(q=q, window=window, page=page, perpage=max(requested_perpage, 100), sort=sort)
+        # MAM does not expose a reliable filetype-only API filter. Fetch a wider
+        # page for the default M4B type, then apply the strict M4B filter
+        # server-side so the UI does not show a mostly-empty page when MAM's
+        # first few matches are EPUB/MP3. Other type modes intentionally keep
+        # every returned filetype within their selected MAM categories.
+        payload, meta = build_search_payload_for_query(q=q, window=window, page=page, perpage=max(requested_perpage, 100), sort=sort, search_type=type)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    cache_key = _search_cache_key(q, window, page, requested_perpage, sort)
+    cache_key = _search_cache_key(q, window, page, requested_perpage, sort, meta.get("type", "m4b"))
     cached = _search_cache_get(cache_key)
     if cached is None:
         try:
             raw = await _mam_client().search(payload)
             items = [normalize_mam_result(item) for item in raw.get("data", [])]
-            items = [item for item in items if item.get("format_confident")]
+            if meta.get("format_filter") == "m4b":
+                items = [item for item in items if item.get("format_confident")]
         except InvalidTorrentId:
             items = []
         except MamError as exc:

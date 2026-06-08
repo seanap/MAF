@@ -456,9 +456,9 @@
     .filter-btn { min-height:22px; padding:2px 6px; margin-left:6px; font-size:.58rem; background:rgba(4,10,22,.75); color:var(--ink-primary); }
     .filter-btn:hover { background: rgba(79,147,255,.18); color: #fff; }
     .filter-menu {
-      position:absolute;
-      z-index:500;
-      top:100%;
+      position:fixed;
+      z-index:1500;
+      top:0;
       left:0;
       min-width:250px;
       max-height:340px;
@@ -585,11 +585,17 @@
         <aside class="panel-title">
           <span class="eyebrow">Search Console</span>
           <h3>MAM Catalog</h3>
-          <p>Blank query invokes the saved three-month advanced M4B search. Header controls sort and filter the loaded table like a restrained spreadsheet artifact.</p>
+          <p>Type defaults to M4B, but can be widened to audiobook, ebook, or all book categories when the archive needs less tunnel vision.</p>
         </aside>
         <div>
           <form id="searchForm" class="row">
             <input id="q" type="text" placeholder="Search title/author/narrator — blank runs default 3-month M4B search" />
+            <select id="type" title="Result type filter">
+              <option value="all">Type: All</option>
+              <option value="audiobook">Type: Audiobook</option>
+              <option value="ebook">Type: Ebook</option>
+              <option value="m4b" selected>Type: M4B</option>
+            </select>
             <select id="sort" title="MAM backend sort">
               <option value="snatchedDesc">MAM sort: Snatched ↓</option>
               <option value="seedersDesc">MAM sort: Seeders ↓</option>
