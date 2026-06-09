@@ -237,7 +237,7 @@ async def lifespan(app: FastAPI):
         await app.state.mam_http.aclose()
         await app.state.cover_http.aclose()
 
-app = FastAPI(title="MAM Audiobook Finder", version="0.4.0-maf", lifespan=lifespan)
+app = FastAPI(title="MAM Audiobook Finder", version="0.4.1-maf", lifespan=lifespan)
 
 
 def _shared_client(name: str) -> httpx.AsyncClient | None:
@@ -548,7 +548,7 @@ async def home(request: Request):
     setup_enabled = not is_setup_disabled()
     if needs_setup() and setup_enabled:
         return templates.TemplateResponse(request, "setup.html", setup_context(request))
-    return templates.TemplateResponse(request, "index.html", {"request": request, "setup_enabled": setup_enabled})
+    return templates.TemplateResponse(request, "index.html", {"request": request, "setup_enabled": setup_enabled, "app_version": app.version})
 
 @app.get("/setup", response_class=HTMLResponse)
 async def setup_page(request: Request):

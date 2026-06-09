@@ -3,6 +3,20 @@
 const $ = (id) => document.getElementById(id);
 function escapeHtml(s) { return (s ?? '').toString().replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;'); }
 function formatSize(sz) { const n=Number(sz); if(!Number.isFinite(n)) return sz ? String(sz) : ''; const u=['B','KB','MB','GB','TB']; let i=0,x=n; while(x>=1024&&i<u.length-1){x/=1024;i++;} return `${x.toFixed(1)} ${u[i]}`; }
+function compactDate(value){
+  if(!value) return '';
+  const d=new Date(String(value).replace(' ','T'));
+  if(Number.isNaN(d.getTime())) return String(value).split(/\s+/)[0] || '';
+  return `${d.getMonth()+1}/${d.getDate()}/${String(d.getFullYear()).slice(-2)}`;
+}
+function compactCount(value){
+  const n=Number(value);
+  if(!Number.isFinite(n)) return value === 0 ? '0' : '';
+  if(n >= 1000000) return `${(n/1000000).toFixed(n >= 10000000 ? 0 : 1).replace(/\.0$/,'')}m`;
+  if(n >= 1000) return `${(n/1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/,'')}k`;
+  return String(n);
+}
+function snatchedValue(r){ return r.snatched ?? r.snatches ?? r.times_completed ?? r.completed ?? r.grabs ?? ''; }
 function parseDate(v) { const t=Date.parse(String(v||'').replace(' ','T')); return Number.isFinite(t) ? t : 0; }
 function lighten(hex, alpha='22') { return /^#[0-9a-fA-F]{6}$/.test(hex||'') ? `${hex}${alpha}` : '#eef6ff55'; }
 async function jsonFetch(url, options={}) { const r=await fetch(url, options); const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.detail||j.message||`HTTP ${r.status}`); return j; }
@@ -139,8 +153,9 @@ function initSearchTable(){
     {key:'narrator', label:'Narrator', sortable:true, filter:true, className:'hide-mobile', mobileLabel:true, value:r=>r.narrator||r.narrator_info||''},
     {key:'format', label:'Filetype', sortable:true, filter:true, className:'hide-mobile', mobileLabel:true, value:r=>(r.format||'').toLowerCase()},
     {key:'size', label:'Size', type:'number', sortable:true, className:'right hide-mobile', mobileLabel:true, value:r=>r.size||0, render:r=>formatSize(r.size)},
-    {key:'seeders', label:'Seeders', type:'number', sortable:true, className:'right hide-mobile', mobileLabel:true, value:r=>r.seeders||0, render:r=>`${r.seeders ?? '-'} / ${r.leechers ?? '-'}`},
-    {key:'uploaded', label:'Uploaded', type:'date', sortable:true, className:'hide-mobile', mobileLabel:true, value:r=>r.uploaded_at||r.added||''},
+    {key:'seeders', label:'Seeders', type:'number', sortable:true, className:'right hide-mobile', mobileLabel:true, value:r=>r.seeders||0, render:r=>compactCount(r.seeders) || '-'},
+    {key:'snatched', label:'Snatched', type:'number', sortable:true, className:'right hide-mobile', mobileLabel:true, value:r=>snatchedValue(r)||0, render:r=>compactCount(snatchedValue(r)) || '-'},
+    {key:'uploaded', label:'Date', type:'date', sortable:true, className:'hide-mobile', mobileLabel:true, value:r=>r.uploaded_at||r.added||'', render:r=>compactDate(r.uploaded_at||r.added||'')},
     {key:'mam', label:'MAM', className:'center', value:r=>r.torrent_id||r.id||'', render:r=>{ const url=mamLink(r.torrent_id||r.id); return url ? `<a href="${url}" target="_blank" rel="noopener noreferrer">MAM</a>` : ''; }},
     {key:'add', label:'Add', value:r=>'', render:r=>actionButton('↓ ADD', async e=>addTorrentFromItem(e.currentTarget,r), !(r.torrent_id||r.id), `Add ${r.title||'torrent'}`)},
   ], {onRender:(shown,total)=> statusEl.textContent=`${shown} shown / ${total} matched`});
@@ -165,7 +180,7 @@ function initRssTable(){ rssTable = new DataTable($('rssItems'), [
   {key:'cover', label:'Cover', className:'cover-cell', value:r=>r.cover_url||'', render:r=>coverCell(r)},
   {key:'feed', label:'Feed', sortable:true, filter:true, className:'hide-mobile', mobileLabel:true, value:r=>r.feed_name||r.feed_id||''},
   {key:'title', label:'Title', sortable:true, filter:true, mobileLabel:true, value:r=>r.title||''},
-  {key:'added', label:'Added', type:'date', sortable:true, className:'hide-mobile', mobileLabel:true, value:r=>r.site_added_at||r.first_seen_at||r.last_seen_at||''},
+  {key:'added', label:'Date', type:'date', sortable:true, className:'hide-mobile', mobileLabel:true, value:r=>r.site_added_at||r.first_seen_at||r.last_seen_at||'', render:r=>compactDate(r.site_added_at||r.first_seen_at||r.last_seen_at||'')},
   {key:'mam', label:'MAM', className:'center', value:r=>r.torrent_id||'', render:r=>r.details_url?`<a href="${escapeHtml(r.details_url)}" target="_blank" rel="noopener noreferrer">MAM</a>`:''},
   {key:'add', label:'Add', value:r=>'', render:r=>actionButton('↓ ADD', async e=>{ await addTorrentFromItem(e.currentTarget,r); await loadRssItems(); }, !r.torrent_id, `Add ${r.title||'torrent'}`)},
   {key:'hide', label:'Hide', value:r=>'', render:r=>actionButton('HIDE', async()=>{ await jsonFetch('/api/history/hide',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({canonical_key:r.canonical_key})}); await loadRssItems(); })},

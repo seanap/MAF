@@ -175,6 +175,7 @@ def normalize_mam_result(item: dict[str, Any]) -> dict[str, Any]:
         "format_confident": bool(str(fmt).lower() == "m4b" or "m4b" in title_l),
         "size": item.get("size"),
         "seeders": item.get("seeders"),
+        "snatched": item.get("snatched") or item.get("snatches") or item.get("times_completed") or item.get("completed"),
         "leechers": item.get("leechers"),
         "uploaded_at": item.get("added"),
         "description_preview": description_preview(item.get("description") or item.get("descr") or item.get("synopsis") or ""),

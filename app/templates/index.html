@@ -567,16 +567,17 @@
       .terminal-viewport::before { display:none; }
       table { display:block; overflow:visible; border:0; background:transparent; font-size:.78rem; margin-top:10px; }
       thead { display:none; }
-      tbody { display:grid; gap:10px; }
+      tbody { display:grid; gap:7px; }
       tbody tr {
         display:grid;
-        grid-template-columns: 56px minmax(0,1fr) auto;
-        gap:5px 9px;
+        grid-template-columns: 48px minmax(0,1fr) auto auto;
+        grid-auto-rows:min-content;
+        gap:3px 7px;
         align-items:start;
-        padding:9px;
-        border:1px solid rgba(143,189,255,.24);
+        padding:7px;
+        border:1px solid rgba(143,189,255,.20);
         background:rgba(3,8,18,.88) !important;
-        box-shadow: inset 0 0 0 1px rgba(201,220,255,.035);
+        box-shadow: inset 0 0 0 1px rgba(201,220,255,.03);
       }
       tbody tr:nth-child(even) { background:rgba(5,12,26,.90) !important; }
       tbody td {
@@ -585,31 +586,76 @@
         padding:0;
         color:rgba(216,232,255,.82);
         min-width:0;
+        overflow:hidden;
+        text-overflow:ellipsis;
       }
-      tbody td:first-child { padding-left:0; border-left:0; grid-row:1 / span 5; }
+      tbody td:first-child { padding-left:0; border-left:0; grid-column:1; grid-row:1 / span 5; }
       tbody td:first-child::before { display:none; }
-      #results td.cover-cell, #rssItems td.cover-cell { grid-column:1; width:56px; min-width:56px; padding:0; }
-      #results td[data-label="Title"], #rssItems td[data-label="Title"] {
-        grid-column:2 / 4;
-        font-family:var(--font-sans);
-        font-size:.95rem;
-        line-height:1.18;
-        color:var(--ink-bright);
-        font-weight:700;
+      #results td.cover-cell, #rssItems td.cover-cell { grid-column:1; width:48px; min-width:48px; padding:0; }
+      #results td[data-label="Date"], #rssItems td[data-label="Date"] {
+        grid-column:2;
+        grid-row:1;
+        align-self:center;
+        font:.58rem var(--font-mono);
+        color:rgba(216,232,255,.58);
+        white-space:nowrap;
       }
+      #results td[data-label="Title"], #rssItems td[data-label="Title"] {
+        grid-column:2 / 5;
+        grid-row:2;
+        font-family:var(--font-sans);
+        font-size:.88rem;
+        line-height:1.14;
+        color:var(--ink-bright);
+        font-weight:800;
+        display:-webkit-box;
+        -webkit-line-clamp:2;
+        -webkit-box-orient:vertical;
+        white-space:normal;
+        overflow:hidden;
+      }
+      #results td[data-label="Author"], #results td[data-label="Narrator"], #results td[data-label="Series"] {
+        grid-column:2 / 5;
+        white-space:nowrap;
+        font-size:.68rem;
+        line-height:1.2;
+        color:rgba(216,232,255,.74);
+      }
+      #results td[data-label="Author"] { grid-row:3; }
+      #results td[data-label="Narrator"] { grid-row:4; }
+      #results td[data-label="Series"] { display:none !important; }
+      #results td[data-label="Filetype"], #results td[data-label="Size"], #results td[data-label="Seeders"], #results td[data-label="Snatched"] {
+        grid-row:5;
+        grid-column:auto;
+        justify-self:start;
+        align-self:center;
+        max-width:100%;
+        padding:.12rem .28rem;
+        border:1px solid rgba(143,189,255,.16);
+        background:rgba(143,189,255,.045);
+        font:.58rem var(--font-mono);
+        white-space:nowrap;
+      }
+      #results td[data-label="Filetype"] { grid-column:2; }
+      #results td[data-label="Size"] { display:none !important; }
+      #results td[data-label="Seeders"] { grid-column:3; }
+      #results td[data-label="Snatched"] { grid-column:4; justify-self:end; }
+      #rssItems td[data-label="Feed"] { display:none !important; }
+      #rssItems td[data-label="Title"] { grid-column:2 / 5; }
       #results td[data-label]::before, #rssItems td[data-label]::before, #history td::before {
         content: attr(data-label);
-        display:block;
-        margin-bottom:2px;
-        font:700 .50rem var(--font-mono);
-        letter-spacing:.12em;
+        display:inline;
+        margin-right:4px;
+        font:700 .47rem var(--font-mono);
+        letter-spacing:.10em;
         color:rgba(143,189,255,.52);
         text-transform:uppercase;
       }
-      #results td[data-label="Title"]::before, #rssItems td[data-label="Title"]::before { display:none; }
-      #results td.center, #rssItems td.center { align-self:end; }
-      #results td:nth-last-child(2), #rssItems td:nth-last-child(3) { grid-column:2; }
-      #results td:last-child, #rssItems td:nth-last-child(2), #rssItems td:last-child { grid-column:auto; justify-self:end; }
+      #results td[data-label="Title"]::before, #rssItems td[data-label="Title"]::before, #results td[data-label="Date"]::before, #rssItems td[data-label="Date"]::before { display:none; }
+      #results td.center, #rssItems td.center { align-self:center; }
+      #results td[data-label="MAM"], #rssItems td[data-label="MAM"] { grid-column:3; grid-row:1; justify-self:end; }
+      #results td[data-label="Add"], #rssItems td[data-label="Add"] { grid-column:4; grid-row:1; justify-self:end; }
+      #rssItems td[data-label="Hide"] { grid-column:2 / 5; grid-row:5; justify-self:end; }
       .hide-mobile { display:block !important; }
       #rssItems .hide-mobile { display:block !important; }
       #feeds, #history { overflow-x:auto; }
@@ -618,8 +664,8 @@
       #feeds tr, #history tr { display:table-row; padding:0; border:0; background:transparent !important; box-shadow:none; }
       #feeds td, #history td { display:table-cell; border:1px solid var(--border-minor); padding:7px 8px; }
       #feeds td:first-child, #history td:first-child { padding-left:8px; }
-      .book-cover-thumb, .cover-wrap.is-missing-cover::before { width:50px; height:74px; }
-      .cover-wrap { width:50px; min-height:74px; }
+      .book-cover-thumb, .cover-wrap.is-missing-cover::before { width:48px; height:70px; }
+      .cover-wrap { width:48px; min-height:70px; }
       .cover-preview-popover { left:10px !important; right:10px !important; top:auto !important; bottom:12px !important; width:auto; max-height:none; }
       .cover-preview-img { max-height:58vh; }
       .filter-menu { position:fixed; left:8px !important; right:8px !important; top:64px !important; min-width:0; max-height:70vh; }
@@ -746,6 +792,6 @@
   </main>
 
   <p class="muted" style="width:min(94vw,1640px); margin: 10px auto 28px;">Health check: <code id="health">…</code></p>
-  <script src="/static/app.js" defer></script>
+  <script src="/static/app.js?v={{ app_version }}" defer></script>
 </body>
 </html>
