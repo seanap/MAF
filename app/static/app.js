@@ -1,4 +1,4 @@
-// Contract markers for backend/frontend tests: it.torrent_id || it.id, fetch('/api/history'), fetch('/api/torrents/add', actionButton('⬇'
+// Contract markers for backend/frontend tests: it.torrent_id || it.id, fetch('/api/history'), fetch('/api/torrents/add', actionButton('↓ ADD'
 // ---------- Small utilities ----------
 const $ = (id) => document.getElementById(id);
 function escapeHtml(s) { return (s ?? '').toString().replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;'); }
@@ -100,13 +100,20 @@ class DataTable {
 const form=$('searchForm'), q=$('q'), typeSel=$('type'), sortSel=$('sort'), windowSel=$('window'), perpageSel=$('perpage'), statusEl=$('status'), filterSummary=$('filterSummary');
 let searchTable, rssTable, feedSettingsLoaded=false;
 function optionLabel(sel){
-  const raw=sel?.selectedOptions?.[0]?.textContent?.replace(/^Type:\s*/,'').replace(/^MAM sort:\s*/,'').replace(/^Past\s+/,'').trim() || '';
-  return raw.replace(/\b\w+/g, w => /^[A-Z0-9]+$/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+  const value=sel?.value || '';
+  const map={
+    m4b:'M4B', audiobook:'Audiobook', ebook:'Ebook', all:'All',
+    snatchedDesc:'Snatched ↓', dateDesc:'Date Added ↓', seedersDesc:'Seeders ↓', sizeDesc:'Size ↓',
+    '':'Auto', past_2_weeks:'2 Weeks', past_1_month:'1 Month', past_2_months:'2 Months', past_3_months:'3 Months', past_4_months:'4 Months', past_12_months:'12 Months'
+  };
+  return map[value] || sel?.selectedOptions?.[0]?.textContent?.replace(/^Type:\s*/,'').replace(/^MAM sort:\s*/,'').replace(/^Past\s+/,'').trim() || '';
 }
+function publicSortLabel(value){ return ({TARGETED_QUERY:'Targeted', snatchedDesc:'Snatched ↓', SNATCHEDDESC:'Snatched ↓', dateDesc:'Date Added ↓', DATEDESC:'Date Added ↓', seedersDesc:'Seeders ↓', sizeDesc:'Size ↓'}[value] || value || ''); }
+function publicPresetLabel(value){ return ({TARGETED_QUERY:'Targeted', targeted_query:'Targeted', default_advanced_3mo:'Default 3 Month', default_m4b_3mo:'Default 3 Month'}[value] || value || ''); }
 function updateFilterSummary(){
   if(!filterSummary) return;
-  const parts=[optionLabel(typeSel), optionLabel(windowSel), optionLabel(sortSel), optionLabel(perpageSel)].filter(Boolean);
-  filterSummary.innerHTML=`<span>${escapeHtml(parts.join(' · '))}</span>`;
+  const parts=[optionLabel(typeSel), optionLabel(sortSel), optionLabel(windowSel), optionLabel(perpageSel)].filter(Boolean);
+  filterSummary.innerHTML=`<span>${escapeHtml('Filters: ' + parts.join(' · '))}</span>`;
 }
 [typeSel, sortSel, windowSel, perpageSel].forEach(sel=>sel?.addEventListener('change', updateFilterSummary));
 updateFilterSummary();
@@ -135,14 +142,14 @@ function initSearchTable(){
     {key:'seeders', label:'Seeders', type:'number', sortable:true, className:'right hide-mobile', mobileLabel:true, value:r=>r.seeders||0, render:r=>`${r.seeders ?? '-'} / ${r.leechers ?? '-'}`},
     {key:'uploaded', label:'Uploaded', type:'date', sortable:true, className:'hide-mobile', mobileLabel:true, value:r=>r.uploaded_at||r.added||''},
     {key:'mam', label:'MAM', className:'center', value:r=>r.torrent_id||r.id||'', render:r=>{ const url=mamLink(r.torrent_id||r.id); return url ? `<a href="${url}" target="_blank" rel="noopener noreferrer">MAM</a>` : ''; }},
-    {key:'add', label:'DL', value:r=>'', render:r=>actionButton('Add', async e=>addTorrentFromItem(e.currentTarget,r), !(r.torrent_id||r.id), `Add ${r.title||'torrent'}`)},
-  ], {onRender:(shown,total)=> statusEl.textContent=`${shown} of ${total} result(s) shown`});
+    {key:'add', label:'Add', value:r=>'', render:r=>actionButton('↓ ADD', async e=>addTorrentFromItem(e.currentTarget,r), !(r.torrent_id||r.id), `Add ${r.title||'torrent'}`)},
+  ], {onRender:(shown,total)=> statusEl.textContent=`${shown} shown / ${total} matched`});
 }
 async function runSearch(){
   const text=(q?.value||'').trim(); const searchType=typeSel?.value||'m4b'; const sortType=sortSel?.value||'snatchedDesc'; const windowValue=windowSel?.value||''; const perpage=parseInt(perpageSel?.value||'25',10);
   statusEl.textContent = text ? 'Searching…' : `Running default 3-month MAM ${searchType.toUpperCase()} search…`;
   const params=new URLSearchParams({q:text, type:searchType, perpage:String(perpage), window:windowValue, sort:sortType});
-  try { const data=await jsonFetch(`/api/search?${params}`); const rows=data.items||[]; searchTable.setRows(rows); statusEl.innerHTML = `${rows.length} result(s) shown${data.total !== undefined ? ` of ${data.total}` : ''}. <span class="pill">Type: ${escapeHtml(data.type||searchType)}</span> <span class="pill">Preset: ${escapeHtml(data.preset||'')}</span> <span class="pill">Window: ${escapeHtml(data.window||'')}</span> <span class="pill">MAM sort: ${escapeHtml(data.sort||'')}</span>`; if($('historyCard')?.style.display !== 'none') await loadHistory(); }
+  try { const data=await jsonFetch(`/api/search?${params}`); const rows=data.items||[]; searchTable.setRows(rows); statusEl.innerHTML = `${rows.length} shown / ${data.total !== undefined ? data.total : rows.length} matched. <span class="pill">Type: ${escapeHtml(optionLabel(typeSel)||data.type||searchType)}</span> <span class="pill">Query Status: ${escapeHtml(publicPresetLabel(data.preset||''))}</span> <span class="pill">Window: ${escapeHtml(optionLabel(windowSel)||data.window||'Auto')}</span> <span class="pill">Sort: ${escapeHtml(publicSortLabel(data.sort||sortType))}</span>`; if($('historyCard')?.style.display !== 'none') await loadHistory(); }
   catch(e){ console.error(e); statusEl.textContent=`Search failed: ${e.message||'unknown error'}`; }
 }
 if(form) form.addEventListener('submit', e=>{ e.preventDefault(); runSearch(); });
@@ -160,8 +167,8 @@ function initRssTable(){ rssTable = new DataTable($('rssItems'), [
   {key:'title', label:'Title', sortable:true, filter:true, mobileLabel:true, value:r=>r.title||''},
   {key:'added', label:'Added', type:'date', sortable:true, className:'hide-mobile', mobileLabel:true, value:r=>r.site_added_at||r.first_seen_at||r.last_seen_at||''},
   {key:'mam', label:'MAM', className:'center', value:r=>r.torrent_id||'', render:r=>r.details_url?`<a href="${escapeHtml(r.details_url)}" target="_blank" rel="noopener noreferrer">MAM</a>`:''},
-  {key:'add', label:'DL', value:r=>'', render:r=>actionButton('Add', async e=>{ await addTorrentFromItem(e.currentTarget,r); await loadRssItems(); }, !r.torrent_id, `Add ${r.title||'torrent'}`)},
-  {key:'hide', label:'Hide', value:r=>'', render:r=>actionButton('Hide', async()=>{ await jsonFetch('/api/history/hide',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({canonical_key:r.canonical_key})}); await loadRssItems(); })},
+  {key:'add', label:'Add', value:r=>'', render:r=>actionButton('↓ ADD', async e=>{ await addTorrentFromItem(e.currentTarget,r); await loadRssItems(); }, !r.torrent_id, `Add ${r.title||'torrent'}`)},
+  {key:'hide', label:'Hide', value:r=>'', render:r=>actionButton('HIDE', async()=>{ await jsonFetch('/api/history/hide',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({canonical_key:r.canonical_key})}); await loadRssItems(); })},
 ], {rowStyle:r=>`background:${lighten(r.feed_color)}`}); rssTable.sort={key:'added', dir:'desc'}; }
 async function loadRssItems(){ try { const j=await jsonFetch('/api/rss/items?combined=true&include_hidden=false&include_grabbed=false&limit=200'); rssTable.setRows(j.items||[]); } catch(e){ console.error('rss items failed',e); } }
 async function loadFeedSettings(){

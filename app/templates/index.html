@@ -171,7 +171,7 @@
     header {
       position:relative;
       display:grid;
-      grid-template-columns: minmax(220px, 330px) minmax(260px, 1fr) auto;
+      grid-template-columns: minmax(220px, 1fr) auto;
       align-items: stretch;
       border-bottom: 1px solid var(--border-panel);
       min-height: 104px;
@@ -188,7 +188,7 @@
     header::after { content:""; position:absolute; width:30px; height:30px; pointer-events:none; z-index:3; }
     header::before { left:10px; top:10px; border-left:2px solid var(--border-glow); border-top:2px solid var(--border-glow); opacity:.7; }
     header::after { right:10px; top:10px; border-right:2px solid var(--border-glow); border-top:2px solid var(--border-glow); opacity:.7; }
-    .brand-cell, .mission-cell, .nav-cell {
+    .brand-cell, .nav-cell {
       padding: clamp(14px, 1.5vw, 22px);
       border-right: 1px solid var(--border-panel);
       display:flex;
@@ -216,31 +216,6 @@
       letter-spacing: .105em;
     }
     .kicker { font-size:.64rem; color:var(--ink-muted); }
-    .mission-cell { position:relative; flex-direction:column; align-items:flex-start; justify-content:center; overflow:hidden; }
-    .mission-cell::before {
-      content:"REQUEST\A ARCHIVE";
-      white-space:pre;
-      position:absolute;
-      right:clamp(8px, 3vw, 48px);
-      top:-.22em;
-      font-family:var(--font-display);
-      font-size:clamp(3.8rem, 9vw, 9rem);
-      line-height:.78;
-      letter-spacing:-.12em;
-      color:rgba(143,189,255,.055);
-      pointer-events:none;
-    }
-    .mission-cell strong {
-      position:relative;
-      font-family: var(--font-display);
-      font-size: clamp(1.35rem, 2.6vw, 3rem);
-      line-height:.92;
-      letter-spacing:-.07em;
-      text-transform:uppercase;
-      max-width: 780px;
-      color:var(--ink-bright);
-    }
-    .mission-cell span { position:relative; color:var(--ink-muted); font-size:.88rem; max-width:760px; }
     .nav-cell { justify-content:center; min-width: 140px; }
     .header-actions { display:flex; gap:8px; align-items:center; justify-content:center; flex-wrap:wrap; }
 
@@ -470,7 +445,7 @@
       text-transform:uppercase;
       letter-spacing:.105em;
     }
-    .filter-summary::before { content:"FILTERS"; color:rgba(201,220,255,.72); }
+    .filter-summary::before { content:"RESULTS"; color:rgba(201,220,255,.72); }
     .filter-summary span { border:1px solid var(--border-minor); padding:.28rem .44rem; background:rgba(3,8,18,.82); text-transform:none; letter-spacing:.03em; }
     .th-sort { cursor:pointer; user-select:none; }
     .filter-btn { min-height:22px; padding:2px 6px; margin-left:6px; font-size:.58rem; background:rgba(4,10,22,.75); color:var(--ink-primary); }
@@ -537,15 +512,13 @@
       .shell { width: calc(100vw - 18px); margin:9px; }
       header { grid-template-columns: 1fr auto; min-height:0; }
       .brand-cell { border-right:1px solid var(--border-panel); }
-      .mission-cell { grid-column:1 / -1; grid-row:2; }
       .nav-cell { border-right:0; }
-      .brand-cell, .mission-cell, .nav-cell { border-bottom:1px solid var(--border-panel); }
+      .brand-cell, .nav-cell { border-bottom:1px solid var(--border-panel); }
       header .nav-cell:last-child { border-bottom:1px solid var(--border-panel); }
       .panel-grid { grid-template-columns: 1fr; gap:12px; }
       .panel-title { display:grid; gap:4px; }
       table { display:block; overflow-x:auto; }
       input[type="text"] { min-width: 100%; }
-      .mission-cell::before { font-size:4.5rem; right:0; top:-.12em; }
     }
     @media (max-width: 680px) {
       body { font-size:14px; }
@@ -558,28 +531,12 @@
         background: linear-gradient(90deg, rgba(143,189,255,.09), transparent 66%), rgba(8,14,28,.90);
       }
       header::before, header::after { width:18px; height:18px; opacity:.48; }
-      .brand-cell, .mission-cell, .nav-cell, .card { padding:10px 10px; }
+      .brand-cell, .nav-cell, .card { padding:10px 10px; }
       .brand-cell { gap:4px; border-right:1px solid var(--border-panel); }
       .brand-mark { gap:8px; }
       .logo { width:24px; height:24px; }
       h1 { font-size: clamp(1.18rem, 7.8vw, 1.7rem); letter-spacing:-.075em; line-height:.92; }
       .kicker { font-size:.50rem; letter-spacing:.08em; }
-      .mission-cell {
-        grid-column:1 / -1;
-        padding-top:8px;
-        padding-bottom:10px;
-        min-height:0;
-        border-bottom:1px solid var(--border-panel);
-      }
-      .mission-cell::before {
-        content:"ARCHIVE";
-        font-size:2.5rem;
-        right:8px;
-        top:-.18em;
-        opacity:.55;
-      }
-      .mission-cell strong { font-size: clamp(.92rem, 5vw, 1.25rem); line-height:1; letter-spacing:-.055em; max-width:70%; }
-      .mission-cell span { margin-top:4px; font-size:.72rem; line-height:1.32; max-width:92%; }
       .nav-cell { min-width:0; border-bottom:0; justify-content:flex-end; }
       .header-actions { gap:6px; }
       #showHistoryBtn, .header-actions button { min-height:34px; padding:7px 9px; font-size:.58rem; }
@@ -590,9 +547,9 @@
       .panel-title .eyebrow { font-size:.56rem; }
       .panel-title h3, .panel-title h4 { font-size: clamp(.98rem, 5vw, 1.25rem); letter-spacing:-.055em; }
       .panel-title p { display:block; margin:.35rem 0 0; font-size:.72rem; line-height:1.35; }
-      #searchForm { display:grid; grid-template-columns: 1fr auto; gap:8px; align-items:stretch; }
-      #q { grid-column:1; min-width:0; width:100%; }
-      #searchBtn { grid-column:2; min-width:92px; }
+      #searchForm { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:8px; align-items:stretch; }
+      #q { grid-column:1 / -1; min-width:0; width:100%; }
+      #searchBtn { grid-column:1 / -1; width:100%; min-width:0; }
       #type, #sort, #window, #perpage { min-width:0; width:100%; font-size:.58rem; min-height:34px; padding:7px 25px 7px 8px; }
       #type { grid-column:1; }
       #sort { grid-column:2; }
@@ -692,10 +649,6 @@
         </div>
         <span class="kicker">MAM → qBittorrent → Audiobookshelf</span>
       </section>
-      <section class="mission-cell">
-        <strong>The Remote Request Archive</strong>
-        <span>Search MAM remotely, stage M4B torrents, and let the home archive handle acquisition and ingest.</span>
-      </section>
       <section class="nav-cell header-actions">
         <button id="showHistoryBtn" title="Show download history">History</button>
         {% if setup_enabled %}<button type="button" onclick="window.location.href='/setup'">Setup</button>{% endif %}
@@ -708,7 +661,6 @@
         <aside class="panel-title">
           <span class="eyebrow">Catalog Query / Remote MAM Session</span>
           <h3>MAM Catalog</h3>
-          <p>Type defaults to M4B, but can be widened to audiobook, ebook, or all book categories when the archive needs less tunnel vision.</p>
         </aside>
         <div>
           <form id="searchForm" class="row">

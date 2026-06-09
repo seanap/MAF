@@ -288,10 +288,10 @@ def test_frontend_cover_preview_and_download_button_contracts():
     assert "showCoverPreview" in app_js
     assert "cover-preview-popover" in html
     assert "mouseenter" in app_js
-    assert "label:'DL'" in app_js
-    assert "actionButton('⬇'" in app_js
-    assert "showDescriptionPopover" not in app_js
-    assert "desc-popover" not in html
+    assert "label:'Add'" in app_js
+    assert "actionButton('↓ ADD'" in app_js
+    assert "showDescriptionModal" not in app_js
+    assert "description-modal" not in html
     assert "Escape" in app_js
 
 
