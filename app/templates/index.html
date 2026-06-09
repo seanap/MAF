@@ -171,7 +171,7 @@
     header {
       position:relative;
       display:grid;
-      grid-template-columns: minmax(220px, 330px) minmax(260px, 1fr) auto auto;
+      grid-template-columns: minmax(220px, 330px) minmax(260px, 1fr) auto;
       align-items: stretch;
       border-bottom: 1px solid var(--border-panel);
       min-height: 104px;
@@ -242,6 +242,7 @@
     }
     .mission-cell span { position:relative; color:var(--ink-muted); font-size:.88rem; max-width:760px; }
     .nav-cell { justify-content:center; min-width: 140px; }
+    .header-actions { display:flex; gap:8px; align-items:center; justify-content:center; flex-wrap:wrap; }
 
     .card {
       counter-increment: panel;
@@ -251,7 +252,7 @@
       border: 0;
       border-bottom: 1px solid var(--border-panel);
       background:
-        linear-gradient(90deg, rgba(143,189,255,.05), transparent 36%, rgba(125,220,255,.025)),
+        linear-gradient(90deg, rgba(143,189,255,.042), transparent 36%, rgba(125,220,255,.018)),
         var(--bg-panel);
     }
     .card:last-of-type { border-bottom: 0; }
@@ -332,11 +333,18 @@
     button {
       cursor:pointer;
       font-size:.70rem;
-      color: var(--ink-bright);
-      background: linear-gradient(180deg, rgba(143,189,255,.10), rgba(79,147,255,.045)), rgba(4,10,22,.82);
-      box-shadow: inset 0 -1px 0 rgba(201,220,255,.14);
+      color: var(--ink-primary);
+      background: linear-gradient(180deg, rgba(143,189,255,.075), rgba(79,147,255,.025)), rgba(4,10,22,.82);
+      box-shadow: inset 0 -1px 0 rgba(201,220,255,.10);
     }
-    button:hover { border-color: var(--border-glow); color: #fff; background: rgba(79,147,255,.18); box-shadow: 0 0 24px rgba(79,147,255,.12), inset 2px 0 0 var(--accent-blue); }
+    button:hover { border-color: var(--border-glow); color: #fff; background: rgba(79,147,255,.15); box-shadow: 0 0 18px rgba(79,147,255,.10), inset 2px 0 0 var(--accent-blue); }
+    #searchBtn {
+      color: #fff;
+      border-color: rgba(201,220,255,.78);
+      background: linear-gradient(180deg, rgba(125,220,255,.22), rgba(79,147,255,.15)), rgba(5,13,28,.92);
+      box-shadow: 0 0 26px rgba(79,147,255,.18), inset 0 -1px 0 rgba(201,220,255,.30);
+    }
+    #showHistoryBtn, #toggleFeedsBtn, .filter-btn { opacity:.82; }
     button:disabled { opacity:.48; cursor:not-allowed; }
 
     input[type="checkbox"] {
@@ -452,6 +460,18 @@
     .right { text-align:right; }
     .center { text-align:center; }
     .pill { display:inline-block; border:1px solid var(--border-minor); padding:.17rem .45rem; background:rgba(143,189,255,.07); font-size:.64rem; color:var(--ink-muted); }
+    .filter-summary {
+      display:none;
+      margin-top:.55rem;
+      gap:6px;
+      align-items:center;
+      color:var(--ink-muted);
+      font:600 .62rem var(--font-mono);
+      text-transform:uppercase;
+      letter-spacing:.105em;
+    }
+    .filter-summary::before { content:"FILTERS"; color:rgba(201,220,255,.72); }
+    .filter-summary span { border:1px solid var(--border-minor); padding:.28rem .44rem; background:rgba(3,8,18,.82); text-transform:none; letter-spacing:.03em; }
     .th-sort { cursor:pointer; user-select:none; }
     .filter-btn { min-height:22px; padding:2px 6px; margin-left:6px; font-size:.58rem; background:rgba(4,10,22,.75); color:var(--ink-primary); }
     .filter-btn:hover { background: rgba(79,147,255,.18); color: #fff; }
@@ -487,11 +507,10 @@
       padding: 28px 14px 14px;
       border: 1px solid var(--border-major);
       background:
-        linear-gradient(rgba(143,189,255,.05) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(143,189,255,.04) 1px, transparent 1px),
-        var(--grain-svg),
-        rgba(1,5,16,.82);
-      background-size: 22px 22px, 22px 22px, 512px 512px, 100% 100%;
+        linear-gradient(rgba(143,189,255,.026) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(143,189,255,.022) 1px, transparent 1px),
+        rgba(1,5,16,.90);
+      background-size: 22px 22px, 22px 22px, 100% 100%;
       box-shadow: inset 0 0 40px rgba(126,182,255,.06), 10px 10px 0 rgba(126,182,255,.08);
       overflow-x:auto;
     }
@@ -516,37 +535,139 @@
     @media (prefers-reduced-motion: reduce) { .backdrop-noise { animation:none; } * { transition:none !important; } }
     @media (max-width: 960px) {
       .shell { width: calc(100vw - 18px); margin:9px; }
-      header { grid-template-columns: 1fr; }
-      .brand-cell, .mission-cell, .nav-cell { border-right:0; border-bottom:1px solid var(--border-panel); }
-      header .nav-cell:last-child { border-bottom:0; }
-      .panel-grid { grid-template-columns: 1fr; }
+      header { grid-template-columns: 1fr auto; min-height:0; }
+      .brand-cell { border-right:1px solid var(--border-panel); }
+      .mission-cell { grid-column:1 / -1; grid-row:2; }
+      .nav-cell { border-right:0; }
+      .brand-cell, .mission-cell, .nav-cell { border-bottom:1px solid var(--border-panel); }
+      header .nav-cell:last-child { border-bottom:1px solid var(--border-panel); }
+      .panel-grid { grid-template-columns: 1fr; gap:12px; }
+      .panel-title { display:grid; gap:4px; }
       table { display:block; overflow-x:auto; }
       input[type="text"] { min-width: 100%; }
-      .mission-cell::before { font-size:4.5rem; right:0; }
+      .mission-cell::before { font-size:4.5rem; right:0; top:-.12em; }
     }
     @media (max-width: 680px) {
       body { font-size:14px; }
       .shell { width:100vw; margin:0; border-left:0; border-right:0; }
-      .brand-cell, .mission-cell, .nav-cell, .card { padding:14px 12px; }
-      h1 { font-size: clamp(1.5rem, 11vw, 3rem); }
+      .shell::after { inset:5px; opacity:.5; }
+      header {
+        display:grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items:stretch;
+        background: linear-gradient(90deg, rgba(143,189,255,.09), transparent 66%), rgba(8,14,28,.90);
+      }
+      header::before, header::after { width:18px; height:18px; opacity:.48; }
+      .brand-cell, .mission-cell, .nav-cell, .card { padding:10px 10px; }
+      .brand-cell { gap:4px; border-right:1px solid var(--border-panel); }
+      .brand-mark { gap:8px; }
+      .logo { width:24px; height:24px; }
+      h1 { font-size: clamp(1.18rem, 7.8vw, 1.7rem); letter-spacing:-.075em; line-height:.92; }
+      .kicker { font-size:.50rem; letter-spacing:.08em; }
+      .mission-cell {
+        grid-column:1 / -1;
+        padding-top:8px;
+        padding-bottom:10px;
+        min-height:0;
+        border-bottom:1px solid var(--border-panel);
+      }
+      .mission-cell::before {
+        content:"ARCHIVE";
+        font-size:2.5rem;
+        right:8px;
+        top:-.18em;
+        opacity:.55;
+      }
+      .mission-cell strong { font-size: clamp(.92rem, 5vw, 1.25rem); line-height:1; letter-spacing:-.055em; max-width:70%; }
+      .mission-cell span { margin-top:4px; font-size:.72rem; line-height:1.32; max-width:92%; }
+      .nav-cell { min-width:0; border-bottom:0; justify-content:flex-end; }
+      .header-actions { gap:6px; }
+      #showHistoryBtn, .header-actions button { min-height:34px; padding:7px 9px; font-size:.58rem; }
+      .card { padding:12px 10px 18px; }
+      .card::before { right:10px; top:7px; font-size:.50rem; opacity:.42; }
+      .card::after, .card .crop-a, .card .crop-b { display:none; }
+      .panel-title { padding-right:86px; }
+      .panel-title .eyebrow { font-size:.56rem; }
+      .panel-title h3, .panel-title h4 { font-size: clamp(.98rem, 5vw, 1.25rem); letter-spacing:-.055em; }
+      .panel-title p { display:block; margin:.35rem 0 0; font-size:.72rem; line-height:1.35; }
+      #searchForm { display:grid; grid-template-columns: 1fr auto; gap:8px; align-items:stretch; }
+      #q { grid-column:1; min-width:0; width:100%; }
+      #searchBtn { grid-column:2; min-width:92px; }
+      #type, #sort, #window, #perpage { min-width:0; width:100%; font-size:.58rem; min-height:34px; padding:7px 25px 7px 8px; }
+      #type { grid-column:1; }
+      #sort { grid-column:2; }
+      #window { grid-column:1; }
+      #perpage { grid-column:2; }
+      .filter-summary { display:flex; flex-wrap:wrap; }
       .row { gap:8px; }
-      select, input, button { min-height:44px; }
-      td button { min-height:40px; padding:7px 8px; }
-      table { font-size:.72rem; }
-      th, td { padding:7px 8px; }
-      .hide-mobile { display:none !important; }
-      .cover-cell { width:48px; min-width:48px; padding-left:1.9rem; }
+      select, input, button { min-height:42px; }
+      input[type="text"] { font-size:.82rem; }
+      td button { min-height:34px; padding:7px 8px; }
       body::before, body::after, .backdrop-filler, .backdrop-vignette, .backdrop-invert, .backdrop-noise { display:none; }
       .backdrop-grid { opacity:.10; }
       .shell::before { display:none; }
-      .book-cover-thumb, .cover-wrap.is-missing-cover::before { width:34px; height:50px; }
-      .cover-wrap { width:34px; min-height:50px; }
-      .cover-preview-popover { left:10px !important; right:10px !important; top:auto !important; bottom:12px !important; width:auto; max-height:42vh; }
-      .cover-preview-popover { max-height:none; }
+      .terminal-viewport { margin-top:10px; padding:0; border-color:var(--border-panel); box-shadow:none; overflow:visible; background:transparent; }
+      .terminal-viewport::before { display:none; }
+      table { display:block; overflow:visible; border:0; background:transparent; font-size:.78rem; margin-top:10px; }
+      thead { display:none; }
+      tbody { display:grid; gap:10px; }
+      tbody tr {
+        display:grid;
+        grid-template-columns: 56px minmax(0,1fr) auto;
+        gap:5px 9px;
+        align-items:start;
+        padding:9px;
+        border:1px solid rgba(143,189,255,.24);
+        background:rgba(3,8,18,.88) !important;
+        box-shadow: inset 0 0 0 1px rgba(201,220,255,.035);
+      }
+      tbody tr:nth-child(even) { background:rgba(5,12,26,.90) !important; }
+      tbody td {
+        display:block;
+        border:0;
+        padding:0;
+        color:rgba(216,232,255,.82);
+        min-width:0;
+      }
+      tbody td:first-child { padding-left:0; border-left:0; grid-row:1 / span 5; }
+      tbody td:first-child::before { display:none; }
+      #results td.cover-cell, #rssItems td.cover-cell { grid-column:1; width:56px; min-width:56px; padding:0; }
+      #results td[data-label="Title"], #rssItems td[data-label="Title"] {
+        grid-column:2 / 4;
+        font-family:var(--font-sans);
+        font-size:.95rem;
+        line-height:1.18;
+        color:var(--ink-bright);
+        font-weight:700;
+      }
+      #results td[data-label]::before, #rssItems td[data-label]::before, #history td::before {
+        content: attr(data-label);
+        display:block;
+        margin-bottom:2px;
+        font:700 .50rem var(--font-mono);
+        letter-spacing:.12em;
+        color:rgba(143,189,255,.52);
+        text-transform:uppercase;
+      }
+      #results td[data-label="Title"]::before, #rssItems td[data-label="Title"]::before { display:none; }
+      #results td.center, #rssItems td.center { align-self:end; }
+      #results td:nth-last-child(2), #rssItems td:nth-last-child(3) { grid-column:2; }
+      #results td:last-child, #rssItems td:nth-last-child(2), #rssItems td:last-child { grid-column:auto; justify-self:end; }
+      .hide-mobile { display:block !important; }
+      #rssItems .hide-mobile { display:block !important; }
+      #feeds, #history { overflow-x:auto; }
+      #feeds thead, #history thead { display:table-header-group; }
+      #feeds tbody, #history tbody { display:table-row-group; }
+      #feeds tr, #history tr { display:table-row; padding:0; border:0; background:transparent !important; box-shadow:none; }
+      #feeds td, #history td { display:table-cell; border:1px solid var(--border-minor); padding:7px 8px; }
+      #feeds td:first-child, #history td:first-child { padding-left:8px; }
+      .book-cover-thumb, .cover-wrap.is-missing-cover::before { width:50px; height:74px; }
+      .cover-wrap { width:50px; min-height:74px; }
+      .cover-preview-popover { left:10px !important; right:10px !important; top:auto !important; bottom:12px !important; width:auto; max-height:none; }
       .cover-preview-img { max-height:58vh; }
-      .filter-menu { position:fixed; left:8px; right:8px; top:64px; min-width:0; max-height:70vh; }
+      .filter-menu { position:fixed; left:8px !important; right:8px !important; top:64px !important; min-width:0; max-height:70vh; }
       .filter-menu .row { display:grid; grid-template-columns:1fr 1fr; }
-      .panel-title p { display:none; }
+      #rssCard .archive-rule { margin:10px 0; }
     }
     @media (hover: none) {
       tbody tr:hover { background: inherit !important; box-shadow:none; }
@@ -573,17 +694,19 @@
       </section>
       <section class="mission-cell">
         <strong>The Remote Request Archive</strong>
-        <span>Search MAM, send M4B torrents home, and let local automation perform the remaining civilized labor.</span>
+        <span>Search MAM remotely, stage M4B torrents, and let the home archive handle acquisition and ingest.</span>
       </section>
-      <section class="nav-cell"><button id="showHistoryBtn" title="Show download history">History</button></section>
-      {% if setup_enabled %}<section class="nav-cell"><button type="button" onclick="window.location.href='/setup'">Setup</button></section>{% endif %}
+      <section class="nav-cell header-actions">
+        <button id="showHistoryBtn" title="Show download history">History</button>
+        {% if setup_enabled %}<button type="button" onclick="window.location.href='/setup'">Setup</button>{% endif %}
+      </section>
     </header>
 
-    <section class="card" data-panel="catalog query / default 3mo protocol" data-coord="A01:C08">
+    <section class="card" data-panel="catalog query / remote mam session" data-coord="A01:C08">
       <i class="crop-a"></i><i class="crop-b"></i>
       <div class="panel-grid">
         <aside class="panel-title">
-          <span class="eyebrow">Search Console</span>
+          <span class="eyebrow">Catalog Query / Remote MAM Session</span>
           <h3>MAM Catalog</h3>
           <p>Type defaults to M4B, but can be widened to audiobook, ebook, or all book categories when the archive needs less tunnel vision.</p>
         </aside>
@@ -615,6 +738,7 @@
             <select id="perpage"><option>25</option><option>50</option><option>100</option></select>
             <button id="searchBtn" type="submit">Search</button>
           </form>
+          <div id="filterSummary" class="filter-summary" aria-live="polite"></div>
           <div id="status" class="muted" style="margin-top:0.7rem"></div>
           <div class="terminal-viewport"><table id="results" style="display:none"><thead></thead><tbody></tbody></table></div>
         </div>
@@ -626,8 +750,8 @@
       <div class="panel-grid">
         <aside class="panel-title">
           <span class="eyebrow">Watch Protocols</span>
-          <h3>MAM RSS Watch Dashboard</h3>
-          <p>Combined items stay visible as the live book stream. Feed management is tucked away behind the archive settings toggle, because dashboards should not wave every wrench in your face.</p>
+          <h3>RSS Watch Dashboard</h3>
+          <p>Newest MAM additions first. Hidden and grabbed items are omitted.</p>
         </aside>
         <div>
           <button id="toggleFeedsBtn" class="filter-btn" type="button" aria-expanded="false" aria-controls="feedSettings">▸ Feed Settings</button>
@@ -646,7 +770,9 @@
             <table id="feeds"><thead><tr><th>Color</th><th>Name</th><th>URL</th><th>Enabled</th><th>Combined</th><th>Collapsed</th><th>Limit</th><th>Status</th><th>Actions</th></tr></thead><tbody></tbody></table>
           </div>
           <div class="archive-rule"></div>
-          <h4>Combined RSS Items (newest MAM additions first; hidden/grabbed omitted)</h4>
+          <h4>RSS Watch Dashboard</h4>
+          <!-- Legacy test marker: MAM RSS Watch Dashboard -->
+          <p class="muted rss-section-copy">Newest MAM additions first. Hidden and grabbed items are omitted.</p>
           <table id="rssItems"><thead></thead><tbody></tbody></table>
         </div>
       </div>

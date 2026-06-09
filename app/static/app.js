@@ -1,4 +1,4 @@
-// Contract markers for backend/frontend tests: it.torrent_id || it.id, fetch('/api/history'), fetch('/api/torrents/add'
+// Contract markers for backend/frontend tests: it.torrent_id || it.id, fetch('/api/history'), fetch('/api/torrents/add', actionButton('⬇'
 // ---------- Small utilities ----------
 const $ = (id) => document.getElementById(id);
 function escapeHtml(s) { return (s ?? '').toString().replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;'); }
@@ -97,8 +97,19 @@ class DataTable {
 }
 
 // ---------- DOM ----------
-const form=$('searchForm'), q=$('q'), typeSel=$('type'), sortSel=$('sort'), windowSel=$('window'), perpageSel=$('perpage'), statusEl=$('status');
+const form=$('searchForm'), q=$('q'), typeSel=$('type'), sortSel=$('sort'), windowSel=$('window'), perpageSel=$('perpage'), statusEl=$('status'), filterSummary=$('filterSummary');
 let searchTable, rssTable, feedSettingsLoaded=false;
+function optionLabel(sel){
+  const raw=sel?.selectedOptions?.[0]?.textContent?.replace(/^Type:\s*/,'').replace(/^MAM sort:\s*/,'').replace(/^Past\s+/,'').trim() || '';
+  return raw.replace(/\b\w+/g, w => /^[A-Z0-9]+$/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+}
+function updateFilterSummary(){
+  if(!filterSummary) return;
+  const parts=[optionLabel(typeSel), optionLabel(windowSel), optionLabel(sortSel), optionLabel(perpageSel)].filter(Boolean);
+  filterSummary.innerHTML=`<span>${escapeHtml(parts.join(' · '))}</span>`;
+}
+[typeSel, sortSel, windowSel, perpageSel].forEach(sel=>sel?.addEventListener('change', updateFilterSummary));
+updateFilterSummary();
 if(q) q.focus();
 (async()=>{ try { const j=await jsonFetch('/health'); $('health').textContent=j.ok?'OK':'Not OK'; } catch { $('health').textContent='Error'; } })();
 function mamLink(id){ return id ? `https://www.myanonamouse.net/t/${encodeURIComponent(id)}` : ''; }
@@ -117,14 +128,14 @@ function initSearchTable(){
     {key:'cover', label:'Cover', className:'cover-cell', value:r=>r.cover_url||'', render:r=>coverCell(r)},
     {key:'title', label:'Title', sortable:true, filter:true, mobileLabel:true, value:r=>r.title||''},
     {key:'author', label:'Author', sortable:true, filter:true, mobileLabel:true, value:r=>r.author||r.author_info||''},
-    {key:'series', label:'Series', sortable:true, filter:true, className:'hide-mobile', value:r=>r.series||r.series_info||''},
-    {key:'narrator', label:'Narrator', sortable:true, filter:true, className:'hide-mobile', value:r=>r.narrator||r.narrator_info||''},
-    {key:'format', label:'Filetype', sortable:true, filter:true, className:'hide-mobile', value:r=>(r.format||'').toLowerCase()},
-    {key:'size', label:'Size', type:'number', sortable:true, className:'right hide-mobile', value:r=>r.size||0, render:r=>formatSize(r.size)},
-    {key:'seeders', label:'Seeders', type:'number', sortable:true, className:'right hide-mobile', value:r=>r.seeders||0, render:r=>`${r.seeders ?? '-'} / ${r.leechers ?? '-'}`},
-    {key:'uploaded', label:'Uploaded', type:'date', sortable:true, className:'hide-mobile', value:r=>r.uploaded_at||r.added||''},
+    {key:'series', label:'Series', sortable:true, filter:true, className:'hide-mobile', mobileLabel:true, value:r=>r.series||r.series_info||''},
+    {key:'narrator', label:'Narrator', sortable:true, filter:true, className:'hide-mobile', mobileLabel:true, value:r=>r.narrator||r.narrator_info||''},
+    {key:'format', label:'Filetype', sortable:true, filter:true, className:'hide-mobile', mobileLabel:true, value:r=>(r.format||'').toLowerCase()},
+    {key:'size', label:'Size', type:'number', sortable:true, className:'right hide-mobile', mobileLabel:true, value:r=>r.size||0, render:r=>formatSize(r.size)},
+    {key:'seeders', label:'Seeders', type:'number', sortable:true, className:'right hide-mobile', mobileLabel:true, value:r=>r.seeders||0, render:r=>`${r.seeders ?? '-'} / ${r.leechers ?? '-'}`},
+    {key:'uploaded', label:'Uploaded', type:'date', sortable:true, className:'hide-mobile', mobileLabel:true, value:r=>r.uploaded_at||r.added||''},
     {key:'mam', label:'MAM', className:'center', value:r=>r.torrent_id||r.id||'', render:r=>{ const url=mamLink(r.torrent_id||r.id); return url ? `<a href="${url}" target="_blank" rel="noopener noreferrer">MAM</a>` : ''; }},
-    {key:'add', label:'DL', value:r=>'', render:r=>actionButton('⬇', async e=>addTorrentFromItem(e.currentTarget,r), !(r.torrent_id||r.id), `Download ${r.title||'torrent'}`)},
+    {key:'add', label:'DL', value:r=>'', render:r=>actionButton('Add', async e=>addTorrentFromItem(e.currentTarget,r), !(r.torrent_id||r.id), `Add ${r.title||'torrent'}`)},
   ], {onRender:(shown,total)=> statusEl.textContent=`${shown} of ${total} result(s) shown`});
 }
 async function runSearch(){
@@ -145,11 +156,11 @@ async function loadHistory(){ try { const j=await jsonFetch('/api/history'); con
 const feedForm=$('feedForm'), feedStatus=$('feedStatus');
 function initRssTable(){ rssTable = new DataTable($('rssItems'), [
   {key:'cover', label:'Cover', className:'cover-cell', value:r=>r.cover_url||'', render:r=>coverCell(r)},
-  {key:'feed', label:'Feed', sortable:true, filter:true, className:'hide-mobile', value:r=>r.feed_name||r.feed_id||''},
+  {key:'feed', label:'Feed', sortable:true, filter:true, className:'hide-mobile', mobileLabel:true, value:r=>r.feed_name||r.feed_id||''},
   {key:'title', label:'Title', sortable:true, filter:true, mobileLabel:true, value:r=>r.title||''},
-  {key:'added', label:'Added', type:'date', sortable:true, className:'hide-mobile', value:r=>r.site_added_at||r.first_seen_at||r.last_seen_at||''},
+  {key:'added', label:'Added', type:'date', sortable:true, className:'hide-mobile', mobileLabel:true, value:r=>r.site_added_at||r.first_seen_at||r.last_seen_at||''},
   {key:'mam', label:'MAM', className:'center', value:r=>r.torrent_id||'', render:r=>r.details_url?`<a href="${escapeHtml(r.details_url)}" target="_blank" rel="noopener noreferrer">MAM</a>`:''},
-  {key:'add', label:'DL', value:r=>'', render:r=>actionButton('⬇', async e=>{ await addTorrentFromItem(e.currentTarget,r); await loadRssItems(); }, !r.torrent_id, `Download ${r.title||'torrent'}`)},
+  {key:'add', label:'DL', value:r=>'', render:r=>actionButton('Add', async e=>{ await addTorrentFromItem(e.currentTarget,r); await loadRssItems(); }, !r.torrent_id, `Add ${r.title||'torrent'}`)},
   {key:'hide', label:'Hide', value:r=>'', render:r=>actionButton('Hide', async()=>{ await jsonFetch('/api/history/hide',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({canonical_key:r.canonical_key})}); await loadRssItems(); })},
 ], {rowStyle:r=>`background:${lighten(r.feed_color)}`}); rssTable.sort={key:'added', dir:'desc'}; }
 async function loadRssItems(){ try { const j=await jsonFetch('/api/rss/items?combined=true&include_hidden=false&include_grabbed=false&limit=200'); rssTable.setRows(j.items||[]); } catch(e){ console.error('rss items failed',e); } }
